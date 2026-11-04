@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>DiEnjamio</title>
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Avisos de DiEnjamio">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{--bg:#000;--card:#101012;--paper:#1A1A1E;--ink:#F4F5F0;--ink2:#B9BBB5;--accent:#D7FF1F;--crit:#FF4D6D}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  main{width:100%;max-width:420px;text-align:center}
+  .logo{width:96px;height:96px;border-radius:22px}
+  h1{font-size:30px;letter-spacing:.06em;margin:14px 0 4px;text-transform:uppercase;font-weight:900}
+  p{color:var(--ink2);margin:0}
+  .card{background:var(--card);border-radius:16px;padding:18px;margin:22px 0 14px;box-shadow:0 0 0 1px #1E1E23;text-align:left}
+  .estado{display:flex;gap:10px;align-items:center;font-weight:700}
+  .dot{width:12px;height:12px;border-radius:50%;background:#555;flex:none}
+  .ok .dot{background:var(--accent)}
+  .mal .dot{background:var(--crit)}
+  button,a.btn{display:block;width:100%;border:0;border-radius:14px;padding:15px 18px;font:inherit;font-weight:800;font-size:17px;cursor:pointer;text-decoration:none;text-align:center;margin-top:14px}
+  .pri{background:var(--accent);color:#0B0B0B}
+  .sec{background:var(--paper);color:var(--ink)}
+  [hidden]{display:none!important}
+  small{color:var(--ink2);display:block;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="icon-192.png" alt="">
+  <h1>DiEnjamio</h1>
+  <p>Avisos de la media mañana y la merienda, de lunes a viernes.</p>
+  <div class="card">
+    <div class="estado" id="estado"><span class="dot"></span><span id="estado-t">Comprobando los avisos…</span></div>
+    <button class="pri" id="activar" type="button" hidden>Activar avisos</button>
+    <a class="btn sec" id="abrir" href="https://claude.ai/artifact/LvGeruJa3M8ibwMCVNuSZZ">Abrir DiEnjamio</a>
+  </div>
+  <small>Para tenerla como una app más: menú del navegador → «Añadir a pantalla de inicio».</small>
+</main>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  const APP_URL = "https://claude.ai/artifact/LvGeruJa3M8ibwMCVNuSZZ";
+  const $ = id => document.getElementById(id);
+  function pinta(clase, txt) { $("estado").className = "estado " + clase; $("estado-t").textContent = txt; }
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function (OneSignal) {
+    try {
+      await OneSignal.init({
+        appId: "48dc2e1d-9d86-4cc9-9dbd-a47248b9b47f",
+        serviceWorkerPath: "dienjamio/OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/dienjamio/" }
+      });
+    } catch (e) { pinta("mal", "No se han podido preparar los avisos. Recarga la página."); return; }
+    try { await OneSignal.login("diego"); } catch (e) {}
+    const refresca = () => {
+      if (!OneSignal.Notifications.isPushSupported()) { pinta("mal", "Este navegador no admite avisos. Ábrela en Chrome."); $("activar").hidden = true; return; }
+      const permiso = OneSignal.Notifications.permission, dentro = OneSignal.User.PushSubscription.optedIn;
+      if (permiso && dentro) { pinta("ok", "Avisos activados en este móvil"); $("activar").hidden = true; }
+      else if (typeof Notification !== "undefined" && Notification.permission === "denied") { pinta("mal", "Los avisos están bloqueados: actívalos en los ajustes del navegador para esta página."); $("activar").hidden = true; }
+      else { pinta("", "Avisos sin activar"); $("activar").hidden = false; }
+    };
+    $("activar").onclick = async () => {
+      try {
+        await OneSignal.Notifications.requestPermission();
+        if (!OneSignal.User.PushSubscription.optedIn) await OneSignal.User.PushSubscription.optIn();
+        await OneSignal.login("diego");
+      } catch (e) {}
+      setTimeout(refresca, 800);
+    };
+    OneSignal.Notifications.addEventListener("permissionChange", refresca);
+    OneSignal.User.PushSubscription.addEventListener("change", refresca);
+    refresca();
+    // Abierta desde el icono de la pantalla de inicio, con los avisos ya activos: directa a la app
+    if (new URLSearchParams(location.search).has("abrir") && OneSignal.Notifications.permission) {
+      pinta("ok", "Abriendo DiEnjamio…");
+      setTimeout(() => { location.href = APP_URL; }, 700);
+    }
+  });
+</script>
+</body>
+</html>
