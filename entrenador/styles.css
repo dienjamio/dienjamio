@@ -664,3 +664,107 @@ body.cinta .c-calle,body:not(.cinta) .c-cinta{display:none}
 label.chk{display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0;flex-wrap:wrap}
 label.chk input{width:auto;display:inline-block;margin:0;accent-color:var(--accent);transform:scale(1.15)}
 label.chk select{width:auto;display:inline-block;margin:0;padding:4px 8px}
+
+/* =========================================================
+   v15 · Estética de la app personal: letra de dorsal, tarjetas limpias y colores por tipo de día
+   ========================================================= */
+:root{
+  --font-display:"Big Shoulders Display","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --font-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --t-calidad:#FF2E63;--t-cuestas:#FF8A00;--t-rodaje:#3DFF8B;--t-tirada:#00E1FF;--t-fuerza:#FFE500;--t-bici:#9D7BFF;--t-carrera:#FF3DF5;--t-descanso:#8A8D93;
+  --sombra:0 0 0 1px #1E1E23;
+}
+.t-calidad{--tc:var(--t-calidad)}.t-cuestas{--tc:var(--t-cuestas)}.t-rodaje{--tc:var(--t-rodaje)}.t-tirada{--tc:var(--t-tirada)}
+.t-fuerza{--tc:var(--t-fuerza)}.t-bici{--tc:var(--t-bici)}.t-carrera{--tc:var(--t-carrera)}.t-descanso{--tc:var(--t-descanso)}
+body{font-family:var(--font-body);font-size:15.5px;line-height:1.42;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit}
+.top h1,.nombre-app h1,.dia-cab h3,.cab h2,#atleta-cab h2,.panel h2,.r-sec,.pp-sec h5,.det-ses>summary{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.035em}
+.dia-cab h3{font-weight:800;font-size:20px;line-height:1.05}
+.top h1{font-weight:900;font-size:25px}
+#atleta-cab h2{font-weight:900;font-size:28px}
+
+/* Tarjetas: negras, sin bordes de neón */
+.dia{border-radius:14px;box-shadow:var(--sombra);background:var(--card);border:0}
+.dia.hoy,.semana-car,.resultado,.bien,.pred,.carga-g{box-shadow:var(--sombra)!important;border:0!important}
+.dia.hoy>.dia-cab h3::after{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-left:8px;vertical-align:4px}
+
+/* Sesiones con la franja del color de su tipo */
+.ses{border-left:4px solid var(--tc,var(--run))!important;border-radius:12px}
+.ses .ses-cab h4{font-weight:800}
+.barras i{background:var(--tc,var(--accent))!important;border-radius:3px 3px 0 0}
+.barras .n0{opacity:.22}.barras .n1{opacity:.4}.barras .n2{opacity:.55}.barras .n3{opacity:.75}.barras .n4{opacity:.9}.barras .n5{opacity:1}
+.pp-main{border-left-color:var(--tc,var(--run))}.pp-main::before{background:var(--tc,var(--run))}
+.pp-r{color:var(--ink)}
+
+/* Dorsal */
+.bib{background:var(--card);border-radius:16px;box-shadow:var(--sombra);overflow:hidden;margin:4px 0 14px}
+.bib-band{background:var(--tc);color:#000;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 16px 8px;font-family:var(--font-display);font-weight:800;font-size:16px;letter-spacing:.09em;text-transform:uppercase}
+.bib-band span:last-child{font-family:var(--font-body);font-weight:700;font-size:12.5px;letter-spacing:.02em;text-transform:none}
+.bib-body{position:relative;padding:20px 18px 14px}
+.pin{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--bg);box-shadow:inset 0 1px 2px rgba(0,0,0,.6)}
+.pin.tl{top:10px;left:10px}.pin.tr{top:10px;right:10px}.pin.bl{bottom:12px;left:10px}.pin.br{bottom:12px;right:10px}
+.bib-title{font-family:var(--font-display);font-weight:900;font-size:clamp(34px,10.5vw,48px);line-height:.92;text-transform:uppercase;margin:4px 6px 14px;overflow-wrap:anywhere}
+.bib .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.bib .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:var(--paper);font-size:13px;font-weight:600}
+.bib .estr{display:flex;align-items:flex-end;gap:2px;height:44px;margin:2px 0 8px}
+.bib .estr i{display:block;background:var(--tc);border-radius:3px 3px 0 0;min-width:2px}
+.bib .estr .n0{opacity:.22}.bib .estr .n1{opacity:.4}.bib .estr .n2{opacity:.55}.bib .estr .n3{opacity:.75}.bib .estr .n4{opacity:.9}
+.ent-texto{font-size:16px;line-height:1.45;margin:0 0 10px;font-weight:600;font-variant-numeric:tabular-nums}
+.bib-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 30px 14px;border-top:2px dashed var(--line)}
+.bib-foot .k{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3)}
+.bib-foot .n{font-weight:600;font-size:15px;line-height:1.25}
+.cd{display:flex;align-items:center;gap:6px;flex:none}
+.cd-n{font-family:var(--font-display);font-weight:900;font-size:42px;line-height:.9;color:var(--accent)}
+.cd-u{font-family:var(--font-display);font-weight:800;font-size:15px;text-transform:uppercase;color:var(--ink2);line-height:1}
+.cd-u small{font-family:var(--font-body);font-size:11px;font-weight:600;text-transform:none;color:var(--ink3)}
+.dorsal{display:none}
+
+/* Semana en filas compactas */
+.card.semana-l{background:var(--card);border-radius:14px;box-shadow:var(--sombra);padding:2px 14px;margin-bottom:10px}
+.wday{border-top:1px solid var(--line)}
+.wday:first-child{border-top:0}
+.wday>summary{list-style:none;cursor:pointer}
+.wday>summary::-webkit-details-marker{display:none}
+.wrow{display:grid;grid-template-columns:42px 6px 1fr auto;gap:10px;align-items:center;padding:11px 0}
+.wrow.hoy{background:linear-gradient(90deg,transparent,var(--accent-soft));margin:0 -14px;padding:11px 14px}
+.wrow .d{text-align:center;line-height:1.05}
+.wrow .d b{display:block;font-family:var(--font-display);font-weight:900;font-size:24px}
+.wrow .d span{font-size:11.5px;font-weight:700;text-transform:uppercase;color:var(--ink2)}
+.wrow .bar{align-self:stretch;border-radius:3px;background:var(--tc)}
+.wrow .tx{min-width:0;display:flex;flex-direction:column;gap:2px}
+.wrow .t{font-weight:700;font-size:15px;line-height:1.25;overflow-wrap:anywhere}
+.wrow .s{font-size:13px;color:var(--ink2);line-height:1.3;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.wrow .st{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.wrow .st .ok{color:var(--accent);font-size:18px;line-height:1}
+.wday>.dia{box-shadow:none!important;background:transparent;padding:0 0 12px;margin:0}
+.wday>.dia>.dia-cab h3{display:none}
+.wday>.dia>.dia-cab{justify-content:flex-end;margin-bottom:4px}
+.leyenda{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--ink2);margin:0 2px 12px}
+.leyenda span{display:inline-flex;align-items:center;gap:5px}
+.leyenda i{width:10px;height:10px;border-radius:3px;background:var(--tc)}
+
+/* Barra inferior con iconos de línea */
+.barra-inf{padding-top:6px}
+.barra-inf button{position:relative;color:var(--ink3);font-weight:600;font-size:12px;gap:3px}
+.barra-inf button .ic{display:inline-flex;width:23px;height:23px}
+.barra-inf button .ic svg{width:100%;height:100%}
+.barra-inf button[aria-current]{color:var(--ink)}
+.barra-inf button[aria-current]::before{content:"";position:absolute;top:-7px;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
+.barra-inf button[aria-current] span{filter:none}
+
+/* Una columna cómoda en el móvil del deportista */
+body.deportista .contenido{max-width:560px}
+body.deportista .top{max-width:560px}
+.kpi b,.r-kpi b,.rl-kpis b,.equipo b{font-family:var(--font-display);font-weight:900;font-size:26px;letter-spacing:.01em}
+.cuenta-atras b,.racha b{font-family:var(--font-display);font-weight:900}
+
+/* Plan a largo plazo */
+.plan-graf{display:flex;align-items:flex-end;gap:3px;height:120px;margin:10px 0 4px}
+.pg-b{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;border:0;background:none;padding:0;cursor:pointer;position:relative;color:var(--ink3)}
+.pg-b i{display:block;width:100%;border-radius:3px 3px 0 0;min-height:2px}
+.pg-b em{position:absolute;top:-2px;font-style:normal;font-size:11px}
+.pg-b small{font-size:9.5px;height:12px;margin-top:3px;white-space:nowrap}
+.leyenda-f{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--ink2);margin-bottom:10px}
+.leyenda-f span{display:inline-flex;align-items:center;gap:5px}
+.leyenda-f i,.fase-p{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+button.cd{border:0;background:none;padding:0;cursor:pointer;text-align:left;color:inherit}

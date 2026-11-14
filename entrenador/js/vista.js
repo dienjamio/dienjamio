@@ -1,8 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611142024";
-import { htmlDetalle } from "./detalle.js?v=202611142024";
-import { infoEjercicio } from "./biblioteca.js?v=202611142024";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611142024";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611142037";
+import { htmlDetalle } from "./detalle.js?v=202611142037";
+import { infoEjercicio } from "./biblioteca.js?v=202611142037";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611142037";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -68,6 +68,22 @@ export function htmlActividades(acts, titulo = "Actividades") {
     }).join("")}</article>`;
 }
 
+/* ---------- Tipo de día (color como en un dorsal) ---------- */
+export function claseTipo(s) {
+  if (!s) return "descanso";
+  if (s.tipo === "competicion") return "carrera";
+  if (s.dep === "fuerza") return "fuerza";
+  if (s.dep === "bike") return "bici";
+  if (s.dep === "swim") return "tirada";
+  if (s.dep === "movilidad") return "descanso";
+  if (s.tipo === "calidad" || s.tipo === "test" || s.tipo === "transicion") return /cuesta/i.test(s.t || "") ? "cuestas" : "calidad";
+  if (s.tipo === "largo") return "tirada";
+  return "rodaje";
+}
+export const NOM_TIPO = { calidad: "Calidad", cuestas: "Cuestas", rodaje: "Rodaje", tirada: "Tirada", fuerza: "Fuerza", bici: "Bici", carrera: "Carrera", descanso: "Descanso" };
+/** El tipo que manda en un día (el entreno principal). */
+export const tipoDia = ses => { const x = ses.filter(y => y.dep !== "movilidad"); return claseTipo(x.find(y => y.dep !== "fuerza") || x[0] || null); };
+
 /* ---------- Calle / cinta ---------- */
 const MODO = "entrenador.modoRitmo";
 const modoCinta = () => { try { return localStorage.getItem(MODO) === "cinta"; } catch (e) { return false; } };
@@ -98,7 +114,7 @@ export function htmlSesion(s, ed = false, op = {}) {
   const d = DEP[s.dep] || DEP.run;
   const reg = op.regs?.[s.id];
   const ej = s.ej && s.ej.length ? `<table class="ej">${s.ej.map(e => `<tr><td><button class="ej-n" data-acc="ejercicio" data-n="${esc(e.n)}">${esc(e.n)} <span aria-hidden="true">ⓘ</span></button></td><td>${esc(e.s)}</td></tr>`).join("")}</table>` : "";
-  return `<div class="ses ${esc(s.dep)}${s.tipo === "competicion" ? " comp" : ""}">
+  return `<div class="ses ${esc(s.dep)} t-${claseTipo(s)}${s.tipo === "competicion" ? " comp" : ""}">
     <div class="ses-cab">
       <h4>${s.tipo === "competicion" ? "" : d.i + " "}${esc(s.t)}${s.editada ? ' <span class="mano" title="Cambiado a mano">✎</span>' : ""}</h4>
       <span class="dur">${fmtMin(s.min)}</span>

@@ -1,18 +1,18 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142024";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142024";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142024";
-import { BIBLIO } from "./biblioteca.js?v=202611142024";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142024";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142024";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142024";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142024";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142024";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142024";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142024";
-import { calcProgreso } from "./progreso.js?v=202611142024";
-import * as A from "./almacen.js?v=202611142024";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142024";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142037";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142037";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142037";
+import { BIBLIO } from "./biblioteca.js?v=202611142037";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142037";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142037";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142037";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142037";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142037";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142037";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142037";
+import { calcProgreso } from "./progreso.js?v=202611142037";
+import * as A from "./almacen.js?v=202611142037";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142037";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -713,22 +713,37 @@ function htmlValoracion(a, lunes) {
   </article>`;
 }
 
-/* ---------------- Plan a 12 semanas ---------------- */
-function pintarPlan() {
-  const a = actual, l0 = lunesDe(hoy());
-  const filas = [];
-  for (let i = 0; i < 12; i++) {
-    const l = sumaDias(l0, 7 * i), s = a.semanas[l];
+/* ---------------- Plan a largo plazo (mín. 20 semanas, o hasta su carrera principal) ---------------- */
+function semanasPlan(a) {
+  const l0 = lunesDe(hoy());
+  const A_ = (a.carreras || []).filter(c => c.prioridad === "A" && c.fecha >= hoy()).sort((x, y) => x.fecha.localeCompare(y.fecha)).pop();
+  const hastaA = A_ ? Math.ceil(diasEntre(l0, A_.fecha) / 7) + 2 : 0;
+  return Math.min(40, Math.max(20, hastaA));
+}
+const COLOR_FASE = { base: "#3DFF8B", construccion: "#00E1FF", especifico: "#FF2E63", puesta: "#FFB000", carrera: "#FF3DF5", descarga: "#8A8D93", iniciacion: "#3DFF8B", readaptacion: "#9D7BFF", progresion: "#00E1FF", consolidacion: "#FF8A00", acumulacion: "#00E1FF", intensificacion: "#FF2E63" };
+async function pintarPlan() {
+  const a = actual, l0 = lunesDe(hoy()), N = semanasPlan(a);
+  // las semanas que falten se generan solas
+  let nuevas = 0;
+  for (let i = 0; i < N; i++) { const l = sumaDias(l0, 7 * i); if (!a.semanas[l]) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); nuevas++; } }
+  if (nuevas) toast(`${nuevas} semanas nuevas generadas`);
+  const ls = Array.from({ length: N }, (_, i) => sumaDias(l0, 7 * i)), mx = Math.max(60, ...ls.map(l => a.semanas[l]?.total || 0));
+  const fases = [...new Map(ls.map(l => a.semanas[l]?.fase).filter(Boolean).map(f => [f.clave, f.n])).entries()];
+  const graf = `<div class="plan-graf">${ls.map((l, i) => { const s = a.semanas[l], c = a.carreras?.find(x => x.fecha >= l && x.fecha <= sumaDias(l, 6) && x.prioridad !== "C");
+    return `<button class="pg-b" data-acc="ir-semana" data-l="${l}" title="${rangoSemana(l)} · ${s ? esc(s.fase.n) + " · " + fmtMin(s.total) : ""}"><i style="height:${s ? Math.max(6, s.total / mx * 100) : 2}%;background:${COLOR_FASE[s?.fase?.clave] || "#555"}"></i>${c ? `<em>🏁</em>` : ""}<small>${i % 4 === 0 ? fechaCorta(l).replace(/^\D+ /, "") : ""}</small></button>`; }).join("")}</div>
+    <div class="leyenda-f">${fases.map(([k, n]) => `<span><i style="background:${COLOR_FASE[k] || "#555"}"></i>${esc(n)}</span>`).join("")}</div>`;
+  const filas = ls.map((l, i) => {
+    const s = a.semanas[l];
     const cs = (a.carreras || []).filter(c => c.fecha >= l && c.fecha <= sumaDias(l, 6));
-    const claves = s ? s.dias.flatMap(d => d.ses).filter(x => ["largo", "calidad", "competicion", "transicion"].includes(x.tipo)).map(x => x.t).slice(0, 3).join(" · ") : "";
-    filas.push(`<tr class="${i < 2 ? "visible" : ""}"><td><button class="link" data-acc="ir-semana" data-l="${l}">${rangoSemana(l)}</button>${i < 2 ? ' <span class="badge-vis" title="La ve el deportista">👁️</span>' : ""}</td>
-      <td>${s ? esc(s.fase.n) : "—"}${s?.editada ? " ✎" : ""}${a.ajustes?.[l] && a.ajustes[l] !== 1 ? ` <small>(${a.ajustes[l] > 1 ? "+" : "−"}${Math.round(Math.abs(a.ajustes[l] - 1) * 100)} %)</small>` : ""}</td>
-      <td>${s ? fmtMin(s.total) : "—"}</td><td class="small">${cs.map(c => `🏁 ${esc(c.nombre)} (${c.prioridad})`).join(" ")}${cs.length && claves ? "<br>" : ""}${esc(claves)}</td></tr>`);
-  }
-  const faltan = Array.from({ length: 12 }, (_, i) => sumaDias(l0, 7 * i)).filter(l => !a.semanas[l]).length;
+    const claves = s ? s.dias.flatMap(d => d.ses).filter(x => ["largo", "calidad", "competicion", "transicion", "test"].includes(x.tipo)).map(x => x.t).slice(0, 3).join(" · ") : "";
+    return `<tr class="${i < 2 ? "visible" : ""}"><td><button class="link" data-acc="ir-semana" data-l="${l}">${rangoSemana(l)}</button>${i < 2 ? ' <span class="badge-vis" title="La ve el deportista">👁️</span>' : ""}</td>
+      <td><i class="fase-p" style="background:${COLOR_FASE[s?.fase?.clave] || "#555"}"></i>${s ? esc(s.fase.n) : "—"}${s?.editada ? " ✎" : ""}${a.ajustes?.[l] && a.ajustes[l] !== 1 ? ` <small>(${a.ajustes[l] > 1 ? "+" : "−"}${Math.round(Math.abs(a.ajustes[l] - 1) * 100)} %)</small>` : ""}</td>
+      <td>${s ? fmtMin(s.total) : "—"}</td><td class="small">${cs.map(c => `🏁 ${esc(c.nombre)} (${c.prioridad})`).join(" ")}${cs.length && claves ? "<br>" : ""}${esc(claves)}</td></tr>`;
+  });
   $("#sub").innerHTML = `<article class="dia plan12">
-    <div class="dia-cab"><h3>Plan a 12 semanas</h3>${faltan ? `<button class="btn pri mini" data-acc="generar-12">Generar las ${faltan} que faltan</button>` : ""}</div>
-    <p class="ayuda">Tu previsión completa. El deportista solo ve las dos primeras (👁️): esta semana y la siguiente. Pulsa una semana para verla o cambiarla.</p>
+    <div class="dia-cab"><h3>Plan a ${N} semanas</h3></div>
+    <p class="ayuda">Tu planificación a largo plazo (mínimo 20 semanas o hasta su carrera principal). Se va ajustando sola con sus registros, sus valoraciones y sus marcas: las semanas futuras que no cambies a mano se rehacen cuando cambia algo. El deportista solo ve las dos primeras (👁️).</p>
+    ${graf}
     <div class="wrap"><table class="acts"><tr><th>Semana</th><th>Fase</th><th>Tiempo</th><th>Claves</th></tr>${filas.join("")}</table></div>
   </article>`;
 }
@@ -1466,10 +1481,7 @@ function enlazar() {
       return pintarAtleta();
     }
     if (acc === "ir-semana") { lunesVista = t.dataset.l; sub = "semana"; return pintarAtleta(); }
-    if (acc === "generar-12") {
-      for (let i = 0; i < 12; i++) { const l = sumaDias(lunesDe(hoy()), 7 * i); if (!a.semanas[l]) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); } }
-      toast("Plan de 12 semanas generado"); return pintarAtleta();
-    }
+
     if (acc === "aceptar-carrera" || acc === "descartar-carrera") {
       const x = (a._aportes || []).find(y => y.id === t.dataset.id);
       if (!x) return;

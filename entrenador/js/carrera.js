@@ -1,5 +1,5 @@
 /* Previsión de carrera: track GPX → perfil kilómetro a kilómetro → ritmo y tiempo previstos. */
-import { fmtRitmo, fmtHoras, parseTiempo } from "./util.js?v=202611142024";
+import { fmtRitmo, fmtHoras, parseTiempo } from "./util.js?v=202611142037";
 
 const R = 6371000, RAD = Math.PI / 180;
 function dist(a, b) {

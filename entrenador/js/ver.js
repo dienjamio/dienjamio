@@ -1,16 +1,16 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611142024";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611142024";
-import { leerArchivo, fusionar } from "./importar.js?v=202611142024";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611142024";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611142024";
-import { avisar, htmlSuscribir } from "./avisos.js?v=202611142024";
-import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611142024";
-import { htmlPrediccion } from "./prediccion.js?v=202611142024";
-import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611142024";
-import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611142024";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611142024";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611142037";
+import { tipoDia, NOM_TIPO, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611142037";
+import { leerArchivo, fusionar } from "./importar.js?v=202611142037";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611142037";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611142037";
+import { avisar, htmlSuscribir } from "./avisos.js?v=202611142037";
+import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611142037";
+import { htmlPrediccion } from "./prediccion.js?v=202611142037";
+import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611142037";
+import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611142037";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611142037";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -36,6 +36,7 @@ async function init() {
   $("#barra").hidden = false;
   $("#barra").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) { v = b.dataset.v; pintar(); } });
   $("#main").addEventListener("click", clic);
+  $("#main").addEventListener("toggle", e => { const d = e.target; if (d.classList?.contains("wday")) { if (d.open) diasAbiertos.add(d.dataset.f); else diasAbiertos.delete(d.dataset.f); } }, true);
   $("#main").addEventListener("change", e => {
     if (e.target.id === "bien-dolor") $("#bien-dolor-txt").hidden = !e.target.checked;
     if (e.target.id === "rec-on" || e.target.id === "rec-h") {
@@ -130,17 +131,17 @@ function pintar() {
     let html = "";
     if (P.mensaje) html += `<div class="mensaje">💬 ${esc(P.mensaje)}</div>`;
     const L = logros();
-    if (L.n) html += `<button class="racha" data-acc="ir-progreso"><span>🔥 <b>${L.racha}</b> semana${L.racha === 1 ? "" : "s"} seguidas</span><span>✅ <b>${L.n}</b> entrenos</span>${L.km ? `<span>🛣️ <b>${Math.round(L.km)}</b> km</span>` : ""}<span>🏅 ${L.M.filter(m => m[0]).length}/${L.M.length}</span></button>`;
-    if (prox) { const d = diasEntre(h, prox.fecha); html += `<button class="cuenta-atras" data-acc="ir-carreras"><b>${d === 0 ? "¡HOY!" : d}</b><span>${d === 0 ? "" : d === 1 ? "día para" : "días para"} <b>${esc(prox.nombre || PRUEBAS[prox.prueba])}</b>${prox.prev && !prox.prev.falta ? ` · previsión ${esc(fmtT(prox.prev.total))}` : ""}</span></button>`; }
+    const racha = L.n ? `<button class="racha" data-acc="ir-progreso"><span>🔥 <b>${L.racha}</b> semana${L.racha === 1 ? "" : "s"} seguidas</span><span>✅ <b>${L.n}</b> entrenos</span>${L.km ? `<span>🛣️ <b>${Math.round(L.km)}</b> km</span>` : ""}<span>🏅 ${L.M.filter(m => m[0]).length}/${L.M.length}</span></button>` : "";
+    if (prox && !sh) { const d = diasEntre(h, prox.fecha); html += `<button class="cuenta-atras" data-acc="ir-carreras"><b>${d === 0 ? "¡HOY!" : d}</b><span>${d === 0 ? "" : d === 1 ? "día para" : "días para"} <b>${esc(prox.nombre || PRUEBAS[prox.prueba])}</b>${prox.prev && !prox.prev.falta ? ` · previsión ${esc(fmtT(prox.prev.total))}` : ""}</span></button>`; }
     if (!sh) html += `<div class="panel vacio"><p>Tu entrenador todavía no ha preparado esta semana.</p></div>`;
     else {
       const i = diaSemana(h), d = sh.dias[i], regs = regsDe(l0);
-      html += htmlResultado(h);
-      if (P.ntfy && !recordatorio()) { let no = false; try { no = !!localStorage.getItem("avisos-no"); } catch (e) { } if (!no) html += `<div class="bien-ok"><span>🔔 <b>Activa los avisos</b> y te llegarán al móvil los mensajes de ${esc(nomEnt())} y tu entreno de cada día.</span><span><button class="btn pri mini" data-acc="ir-avisos">Activar</button> <button class="link" data-acc="avisos-no">Ahora no</button></span></div>`; }
+      html += htmlDorsal(d, h, prox, i < 6 ? sh.dias[i + 1] : (P.semanas[sumaDias(l0, 7)]?.dias[0] || null));
       html += htmlBien(h);
-      html += htmlDorsal(d, h, prox);
+      html += htmlResultado(h);
+      if (P.ntfy && !recordatorio()) { let no = false; try { no = !!localStorage.getItem("avisos-no"); } catch (e) { } if (!no) html += `<div class="bien-ok"><span>🔔 <b>Activa los avisos</b> y te llegarán al móvil los mensajes de ${esc(P.entrenador ? nomEnt() : "tu entrenador")} y tu entreno de cada día.</span><span><button class="btn pri mini" data-acc="ir-avisos">Activar</button> <button class="link" data-acc="avisos-no">Ahora no</button></span></div>`; }
       if (d.ses.some(x => ["run", "bike"].includes(x.dep))) html += `<div id="tiempo-hoy">${geoGuardada() ? `<p class="small muted">Cargando el tiempo…</p>` : `<button class="btn sec mini" data-acc="ver-tiempo">📍 Ver el tiempo y la mejor hora para entrenar</button>`}</div>`;
-      html += "<!--extra-->";
+      html += "<!--extra-->" + racha;
       html += `<article class="dia hoy"><div class="dia-cab"><h3>Entreno</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
         ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true, abierto: s.dep !== "movilidad" })).join("") + actividades().filter(a => a.fecha === h).map(a => `<div class="reloj"><button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button></div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
       // entrenos de días anteriores sin registrar
@@ -148,8 +149,6 @@ function pintar() {
       if (sin.length) html += `<div class="pendientes"><b>Sin registrar esta semana:</b> ${sin.map(x => `<button class="link" data-acc="registrar" data-id="${x.s.id}">${DIAS[x.k]} · ${esc(x.s.t)}</button>`).join(" · ")}</div>`;
       if (i >= 4) html += htmlValorar(l0);
       html += htmlMenuDia(sh, i);
-      const man = sh.dias[(i + 1) % 7];
-      if (i < 6) html += `<div class="manana"><b>Mañana:</b> ${man.ses.length ? man.ses.map(s => esc(s.t)).join(" + ") : "descanso"}</div>`;
     }
     if (sh) html = html.replace("<!--extra-->", htmlSemanaCarrera(h, prox) + htmlResumenLunes(h));
     m.innerHTML = html;
@@ -157,7 +156,19 @@ function pintar() {
   } else if (v === "semana") {
     const regs = regsDe(lunes), editable = lunes <= lunesDe(hoy());
     const acts = actividades();
-    m.innerHTML = navSemana() + (snap ? `<div class="fila cal-f"><button class="btn sec mini" data-acc="calendario">📅 Añadir la semana a mi calendario</button></div>` + htmlCabSemana(snap) + snap.dias.map((_, i) => htmlDia(snap, i, false, { regs, acts, registrar: editable && sumaDias(lunes, i) <= hoy() })).join("") + (editable ? htmlValorar(lunes) : "") : `<div class="panel vacio"><p>Sin plan para esta semana.</p></div>`);
+    const fila = i => {
+      const d = snap.dias[i], f = sumaDias(lunes, i), t = tipoDia(d.ses), ses = d.ses.filter(x => x.dep !== "movilidad");
+      const hechas = ses.filter(x => regs[x.id] && regs[x.id].hecho !== "no").length || acts.filter(a => a.fecha === f && ["run", "bike", "swim", "fuerza"].includes(a.dep)).length;
+      const princ = ses.find(x => x.dep !== "fuerza") || ses[0];
+      return `<details class="wday t-${t}" data-f="${f}"${f === hoy() || diasAbiertos.has(f) ? " open" : ""}><summary class="wrow${f === hoy() ? " hoy" : ""}">
+        <span class="d"><b>${+f.slice(8)}</b><span>${DIAS[i].slice(0, 3)}</span></span><span class="bar"></span>
+        <span class="tx"><span class="t">${ses.length ? ses.map(x => esc(x.t)).join(" + ") : "Descanso"}</span><span class="s">${princ?.c ? esc(princ.c.calle) : princ?.z ? esc(princ.z) : ses.length ? "" : "Recuperar también es entrenar"}</span></span>
+        <span class="st">${hechas && ses.length ? `<b class="ok">✓</b>` : ""}${ses.length ? `<span>${ses.reduce((x, y) => x + (+y.min || 0), 0)}'</span>` : ""}</span>
+      </summary>${htmlDia(snap, i, false, { regs, acts, registrar: editable && f <= hoy() })}</details>`;
+    };
+    m.innerHTML = navSemana() + (snap ? htmlCabSemana(snap) + `<div class="card semana-l">${snap.dias.map((_, i) => fila(i)).join("")}</div>
+      <div class="leyenda">${["calidad", "cuestas", "rodaje", "tirada", "fuerza", "bici", "carrera", "descanso"].filter(t => snap.dias.some(d => tipoDia(d.ses) === t)).map(t => `<span class="t-${t}"><i></i>${NOM_TIPO[t]}</span>`).join("")}</div>
+      <div class="fila cal-f"><button class="btn sec mini" data-acc="calendario">📅 Añadir la semana a mi calendario</button></div>` + (editable ? htmlValorar(lunes) : "") : `<div class="panel vacio"><p>Sin plan para esta semana.</p></div>`);
   } else if (v === "menu") {
     m.innerHTML = navSemana() + (snap ? snap.dias.map((_, i) => htmlMenuDia(snap, i)).join("") + `<p class="aviso">Menú orientativo según la carga de cada día.</p>` : "");
   } else if (v === "carreras") {
@@ -227,23 +238,33 @@ function logros() {
 }
 
 /* Tarjeta tipo dorsal con el entreno principal de hoy */
-const CAT = { calidad: ["Calidad", "cal"], cuestas: ["Cuestas", "cue"], suave: ["Rodaje", "rod"], recuperacion: ["Regenerativo", "rod"], largo: ["Tirada", "tir"], fuerza: ["Fuerza", "fue"], bike: ["Bici", "bic"], swim: ["Natación", "nat"], competicion: ["Carrera", "car"], test: ["Test", "cal"], iniciacion: ["Correr y andar", "rod"], readapt: ["Vuelta a correr", "rod"], activacion: ["Activación", "rod"], movilidad: ["Movilidad", "mov"] };
-function htmlDorsal(d, h, prox) {
+/* Dorsal del día: franja del color del tipo, título grande, chinchetas y línea de corte */
+const NOM_SES = { recuperacion: "Regenerativo", iniciacion: "Correr y andar", readapt: "Vuelta a correr", activacion: "Activación", test: "Test" };
+function htmlDorsal(d, h, prox, man = null) {
   const ses = d.ses.filter(s => s.dep !== "movilidad");
-  const s = ses.find(x => x.dep !== "fuerza") || ses[0] || d.ses[0];
-  const k = !s ? "descanso" : s.tipo === "competicion" ? "competicion" : s.dep === "fuerza" ? "fuerza" : s.dep === "bike" ? "bike" : s.dep === "swim" ? "swim" : s.dep === "movilidad" ? "movilidad" : /cuesta/i.test(s.t) ? "cuestas" : s.tipo;
-  const [cat, cls] = CAT[k] || (k === "descanso" ? ["Descanso", "des"] : ["Entreno", "rod"]);
-  const total = d.ses.reduce((t, x) => t + (+x.min || 0), 0);
+  const s = ses.find(x => x.dep !== "fuerza") || ses[0] || null;
+  const t = tipoDia(d.ses);
+  const cat = s ? (NOM_SES[s.tipo] || NOM_TIPO[t]) : "Descanso";
+  const total = d.ses.reduce((x, y) => x + (+y.min || 0), 0);
   const dias = prox ? diasEntre(h, prox.fecha) : null;
-  return `<div class="dorsal ${cls}">
-    <div class="dor-cab"><span class="dor-cat">${cat}</span><span>${fechaLarga(h).replace(/ de \d{4}$/, "")}</span></div>
-    <div class="dor-t">${s ? esc(s.tipo === "competicion" ? s.t.replace(/^🏁\s*/, "") : s.t) : "Hoy toca descansar"}</div>
-    ${s?.c ? `<div class="dor-c"><span class="c-calle">${esc(s.c.calle)}</span><span class="c-cinta">${esc(s.c.cinta)}</span></div>` : s?.z ? `<div class="dor-c">${esc(s.z)}</div>` : ""}
-    ${consejoBien(h, s)}
-    <div class="dor-pie">${total ? `<span>⏱️ ${total >= 60 ? Math.floor(total / 60) + " h " + (total % 60 ? total % 60 + "'" : "") : total + "'"}</span>` : "<span>Recuperar también es entrenar</span>"}${ses.length > 1 ? `<span>+ ${ses.slice(1).map(x => esc(x.t)).join(" + ")}</span>` : ""}${prox && dias > 0 ? `<span>🏁 ${dias} día${dias === 1 ? "" : "s"} para ${esc(prox.nombre || PRUEBAS[prox.prueba])}</span>` : ""}</div>
+  const est = s?.est?.length > 1 ? `<div class="estr">${s.est.map(([m, n]) => `<i class="n${n}" style="flex-grow:${m};height:${18 + n * 16}%"></i>`).join("")}</div>` : "";
+  const fmtT = m => m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? " " + (m % 60) + "'" : ""}` : m + "'";
+  return `<div class="bib t-${t}">
+    <div class="bib-band"><span>${cat}</span><span>${fechaLarga(h).replace(/ de \d{4}$/, "")}</span></div>
+    <div class="bib-body"><i class="pin tl"></i><i class="pin tr"></i><i class="pin bl"></i><i class="pin br"></i>
+      <div class="bib-title">${s ? esc(s.tipo === "competicion" ? s.t.replace(/^🏁\s*/, "") : s.t) : "Hoy toca descansar"}</div>
+      <div class="chips">${total ? `<span class="chip">⏱️ ${fmtT(total)}</span>` : `<span class="chip">😴 Recuperar también es entrenar</span>`}${ses.slice(1).map(x => `<span class="chip">+ ${esc(x.t)}</span>`).join("")}${s?.z && !s.c ? `<span class="chip">${esc(s.z)}</span>` : ""}</div>
+      ${est}
+      ${s?.c ? `<p class="ent-texto"><span class="c-calle">${esc(s.c.calle)}</span><span class="c-cinta">${esc(s.c.cinta)}</span></p>` : ""}
+      ${consejoBien(h, s)}
+    </div>
+    <div class="bib-foot"><div><div class="k">Mañana</div><div class="n">${man ? (man.ses.length ? man.ses.map(x => esc(x.t)).join(" + ") : "Descanso") : "—"}</div></div>
+      ${prox && dias > 0 ? `<button class="cd" data-acc="ir-carreras" title="${esc(prox.nombre || PRUEBAS[prox.prueba])}"><span class="cd-n">${dias}</span><span class="cd-u">día${dias === 1 ? "" : "s"}<br><small>${esc((prox.nombre || PRUEBAS[prox.prueba]).slice(0, 18))}</small></span></button>` : ""}</div>
   </div>`;
 }
 const fmtT = s => { s = Math.round(s); const h = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${mm}:${String(ss).padStart(2, "0")}`; };
+
+const diasAbiertos = new Set(); // días de la semana que el deportista ha desplegado (siguen abiertos al repintar)
 
 /* ---------------- Bienestar diario ---------------- */
 let bienTmp = null;
@@ -351,7 +372,7 @@ function htmlAvisos() {
   if (!P.ntfy) return "";
   const r = recordatorio();
   return `<article class="dia avisos" id="avisos"><div class="dia-cab"><h3>🔔 Avisos en tu móvil</h3></div>
-    <p class="small">Te avisa cuando ${esc(nomEnt())} te escribe o comenta tus entrenos y, si quieres, cada mañana con el entreno del día.</p>
+    <p class="small">Te avisa cuando ${esc(P.entrenador ? nomEnt() : "tu entrenador")} te escribe o comenta tus entrenos y, si quieres, cada mañana con el entreno del día.</p>
     ${htmlSuscribir(P.ntfy, "tú")}
     <label class="chk"><input type="checkbox" id="rec-on" ${r?.on ? "checked" : ""}> Recordarme el entreno del día a las <select id="rec-h">${[6, 7, 8, 9, 10, 12, 14, 17, 19].map(h => `<option value="${h}" ${(r?.h ?? 8) === h ? "selected" : ""}>${h}:00</option>`).join("")}</select></label>
   </article>`;
