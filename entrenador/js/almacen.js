@@ -116,6 +116,16 @@ export async function borrarArchivo(a, id) {
   await fb.deleteDoc(ref(a.id, "archivos", id));
 }
 
+/* Lo guardado en este navegador antes de conectar la nube */
+export async function datosLocales() {
+  const atletas = lget(KEY, []);
+  if (!atletas.length) return null;
+  let docs = [];
+  try { docs = (await idbOp("readonly", s => s.getAll())) || []; } catch (e) { }
+  return atletas.map(a => ({ ficha: a, semanas: lget(KEY_S(a.id), {}), archivos: docs.filter(d => d.aid === a.id).map(({ aid, ...d }) => d) }));
+}
+export function olvidarLocales() { const l = lget(KEY, []); l.forEach(a => localStorage.removeItem(KEY_S(a.id))); localStorage.removeItem(KEY); }
+
 /* Publicación para el deportista */
 export async function publicar(a, datos) {
   if (!nube || !usuario) return false;

@@ -61,12 +61,28 @@ function pantallaEntrar() {
 async function cargarLista() {
   atletas = await A.listar();
   if (!A.nube && !atletas.length) await migrarV1();
+  if (A.nube && !atletas.length) await subirLocales();
   atletas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
   $("#aviso-nube").hidden = A.nube;
   $("#aviso-nube").innerHTML = `⚠️ Todavía no está conectada a internet (Firebase): los deportistas se guardan solo en este navegador y <b>sus enlaces no funcionarán</b> hasta conectarla.`;
   pintarLista();
   const id = new URLSearchParams(location.search).get("a");
   if (id && atletas.some(x => x.id === id)) abrir(id);
+}
+
+/* Al conectar la nube: subir lo que se creó en este navegador */
+async function subirLocales() {
+  const loc = await A.datosLocales();
+  if (!loc || !confirm(`En este navegador tienes ${loc.length} deportista${loc.length > 1 ? "s" : ""} creado${loc.length > 1 ? "s" : ""} antes de conectar la nube (${loc.map(x => x.ficha.nombre).join(", ")}). ¿Subirlos a tu cuenta?`)) return;
+  for (const x of loc) {
+    await A.guardarFicha(x.ficha);
+    for (const s of Object.values(x.semanas)) await A.guardarSemana(x.ficha, s);
+    for (const d of x.archivos) { try { await A.guardarArchivo(x.ficha, d); } catch (e) { toast(`${d.nombre}: ${e.message}`); } }
+    atletas.push(x.ficha);
+    try { x.ficha.semanas = x.semanas; await publicar(x.ficha); } catch (e) { }
+  }
+  A.olvidarLocales();
+  toast("Deportistas subidos a tu cuenta");
 }
 
 /* Datos de la versión anterior (solo navegador) */
