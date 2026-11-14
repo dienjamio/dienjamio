@@ -1,9 +1,9 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js";
-import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha } from "./vista.js";
-import * as A from "./almacen.js";
-import { leerArchivo, resumen, fusionar } from "./importar.js";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611140943";
+import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611140943";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha } from "./vista.js?v=202611140943";
+import * as A from "./almacen.js?v=202611140943";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611140943";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)

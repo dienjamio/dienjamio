@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611140943";
 
 /* =========================================================
    Catálogos

@@ -4,7 +4,7 @@
      entrenadores/{uid}/deportistas/{id}/semanas/{lunes}   plan de cada semana
      entrenadores/{uid}/deportistas/{id}/archivos/{fid}    PDF e informes (hasta ~700 KB)
      publico/{token}                                 lo que ve el deportista con su enlace */
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig } from "./firebase-config.js?v=202611140943";
 
 const V = "10.12.2";
 const SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}.js`;
@@ -66,7 +66,10 @@ const envolver = v => Array.isArray(v) ? v.map(x => Array.isArray(x) ? { _l: env
 const desenvolver = v => Array.isArray(v) ? v.map(desenvolver)
   : (v && typeof v === "object") ? (Array.isArray(v._l) && Object.keys(v).length === 1 ? desenvolver(v._l) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, desenvolver(x)]))) : v;
 export const limpio = o => envolver(JSON.parse(JSON.stringify(o)));
-export const leer = d => desenvolver(d);
+/* Fichas, semanas y enlaces se guardan como un único texto JSON: Firestore no tiene que indexar
+   miles de campos (límite de 40.000 por documento) y no hay problemas con listas anidadas. */
+const aDoc = (o, extra = {}) => ({ ...extra, json: JSON.stringify(o) });
+export const leer = d => d && typeof d.json === "string" ? JSON.parse(d.json) : desenvolver(d);
 
 export async function listar() {
   if (!nube) return lget(KEY, []);
@@ -81,7 +84,7 @@ export async function guardarFicha(a) {
     if (!lset(KEY, l)) throw new Error("No queda espacio en el navegador");
     return;
   }
-  await fb.setDoc(ref(a.id), limpio(ficha));
+  await fb.setDoc(ref(a.id), aDoc(ficha));
 }
 export async function cargarSemanas(a) {
   if (!nube) return lget(KEY_S(a.id), {});
@@ -91,7 +94,7 @@ export async function cargarSemanas(a) {
 }
 export async function guardarSemana(a, snap) {
   if (!nube) { const s = lget(KEY_S(a.id), {}); s[snap.lunes] = snap; if (!lset(KEY_S(a.id), s)) throw new Error("No queda espacio en el navegador"); return; }
-  await fb.setDoc(ref(a.id, "semanas", snap.lunes), limpio(snap));
+  await fb.setDoc(ref(a.id, "semanas", snap.lunes), aDoc(snap));
 }
 export async function borrarSemana(a, lunes) {
   if (!nube) { const s = lget(KEY_S(a.id), {}); delete s[lunes]; lset(KEY_S(a.id), s); return; }
@@ -136,12 +139,15 @@ export function olvidarLocales() { const l = lget(KEY, []); l.forEach(a => local
 /* Publicación para el deportista */
 export async function publicar(a, datos) {
   if (!nube || !usuario) return false;
-  await fb.setDoc(fb.doc(db, "publico", a.token), limpio({ ...datos, owner: usuario.uid, actualizado: new Date().toISOString() }));
+  const actualizado = new Date().toISOString();
+  await fb.setDoc(fb.doc(db, "publico", a.token), aDoc({ ...datos, actualizado }, { owner: usuario.uid, actualizado }));
   return true;
 }
 export async function leerPublico(token) {
   if (!nube) throw new Error("sin-nube");
   await cargarFirebase();
   const d = await fb.getDoc(fb.doc(db, "publico", token));
-  return d.exists() ? leer(d.data()) : null;
+  if (!d.exists()) return null;
+  const { json, owner, ...resto } = d.data();
+  return json ? { ...JSON.parse(json) } : desenvolver(resto);
 }
