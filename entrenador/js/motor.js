@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid } from "./util.js";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js";
 
 /* =========================================================
    Catálogos
@@ -73,9 +73,32 @@ function calcFase(a, ctx) {
 }
 
 /* =========================================================
+   Datos efectivos: lo que pone la ficha y, si falta, lo que dicen sus actividades
+   ========================================================= */
+export function efectivo(a) {
+  const h = a.hist;
+  if (!h || a._ef) return a;
+  const fc = { ...(a.fc || {}) }, marcas = { ...(a.marcas || {}) }, de = {};
+  if (!+fc.max && h.fcMaxObs) { fc.max = h.fcMaxObs; de.fcmax = true; }
+  if (!+fc.umbral && h.lthr && !Array.isArray(fc.zonas)) { fc.umbral = h.lthr; de.umbral = true; }
+  for (const k of ["5k", "10k", "media", "maraton"]) if (!marcas[k] && h.mejores?.[k]) { marcas[k] = fmtHoras(h.mejores[k].s); de["m" + k] = true; }
+  let ftp = a.ftp;
+  if (!+ftp && h.ftpEst) { ftp = h.ftpEst; de.ftp = true; }
+  return { ...a, fc, marcas, ftp, _ef: true, _de: de };
+}
+/** Minutos de entreno de resistencia que tocan esta semana según su historial (progresión +5 %/semana). */
+function volumenHistorial(a, lunes) {
+  const h = a.hist;
+  if (!h || !h.horasMedia || +a.horas > 0) return null;
+  const w = clamp(Math.floor(diasEntre(lunesDe(h.fecha), lunes) / 7), 0, 12);
+  return h.horasMedia * 60 * 1.1 * (1 + 0.05 * w);
+}
+
+/* =========================================================
    Zonas
    ========================================================= */
 export function calcZonas(a) {
+  a = efectivo(a);
   const fc = a.fc || {};
   const fcmaxEst = !fc.max;
   const fcmax = +fc.max || Math.round(208 - 0.7 * (a.edad || 35));
@@ -86,13 +109,13 @@ export function calcZonas(a) {
   if (propias) { zonasFC = fc.zonas.map(z => [+z[0], +z[1]]); metodo = "Zonas propias del deportista"; }
   else if (umbral) {
     zonasFC = [[0.65, 0.84], [0.85, 0.89], [0.90, 0.94], [0.95, 0.99], [1.0, 1.06]].map(([lo, hi]) => [Math.round(umbral * lo), Math.min(Math.round(umbral * hi), fc.max ? fcmax : 999)]);
-    metodo = `FC de umbral ${umbral} ppm (método Friel)`;
+    metodo = `FC de umbral ${umbral} ppm${a._de?.umbral ? " (estimada con sus actividades)" : ""} (método Friel)`;
   } else if (fcrep) {
     zonasFC = [[0.5, 0.6], [0.6, 0.7], [0.7, 0.8], [0.8, 0.9], [0.9, 1]].map(([lo, hi]) => [Math.round(fcrep + (fcmax - fcrep) * lo), Math.round(fcrep + (fcmax - fcrep) * hi)]);
-    metodo = `FC máx ${fcmax} y reposo ${fcrep} (método Karvonen)`;
+    metodo = `FC máx ${fcmax}${a._de?.fcmax ? " (de sus actividades)" : ""} y reposo ${fcrep} (método Karvonen)`;
   } else {
     zonasFC = [[0.5, 0.6], [0.6, 0.7], [0.7, 0.8], [0.8, 0.9], [0.9, 1]].map(([lo, hi]) => [Math.round(fcmax * lo), Math.round(fcmax * hi)]);
-    metodo = `% de la FC máx ${fcmax}${fcmaxEst ? " (estimada por edad: mejor medirla o importarla)" : ""}`;
+    metodo = `% de la FC máx ${fcmax}${fcmaxEst ? " (estimada por edad: mejor medirla o importarla)" : a._de?.fcmax ? " (de sus actividades)" : ""}`;
   }
 
   const m = a.marcas || {};
@@ -349,12 +372,13 @@ function colocar(a, T, F, ctx) {
 const PESO = { largo: 2.2, calidad: 1.3, suave: 1, recuperacion: 0.65, tecnica: 0.9, transicion: 1.4, activacion: 0.45 };
 const MULT = { run: 1, bike: 1.6, swim: 1 };
 const MIN_D = { run: 20, bike: 30, swim: 30 };
-function topes(a, s, obj) {
+function topes(a, s, obj, lunes) {
   const ini = a.nivel === "principiante", adv = a.nivel === "avanzado";
   const f = ini ? 0.75 : 1;
   if (s.tope && s.tipo !== "largo") return s.tope;
   if (s.dep === "run") {
-    const largo = { "5k": 80, "10k": 95, media: 130, maraton: 180, triatlon: 100, ciclismo: 70 }[obj] || 90;
+    let largo = { "5k": 80, "10k": 95, media: 130, maraton: 180, triatlon: 100, ciclismo: 70 }[obj] || 90;
+    if (a.hist?.largoRun && lunes) { const w = clamp(Math.floor(diasEntre(lunesDe(a.hist.fecha), lunes) / 7), 0, 12); largo = Math.min(largo / f, Math.max(40, a.hist.largoRun * 1.1 + 5 * w)); }
     return { largo: largo * f, calidad: 75, suave: (adv ? 80 : 65) * f, recuperacion: 45, activacion: 30 }[s.tipo] ?? 60;
   }
   if (s.dep === "bike") return { largo: (obj === "ciclismo" ? 330 : 240) * f, calidad: 120, suave: 120, recuperacion: 60, transicion: 120, activacion: 45 }[s.tipo] ?? 90;
@@ -383,8 +407,10 @@ function duraciones(a, semana, F, ctx, Z) {
   const resis = todas.filter(s => s.min == null);
   const fijos = todas.filter(s => s.min != null && s.tipo !== "competicion").reduce((t, s) => t + s.min, 0);
   const disponible = [0, 1, 2, 3, 4, 5, 6].reduce((t, d) => t + (dispDia(a, d).on ? Math.min(maxDia(a, d), 240) : 0), 0);
+  const hist = volumenHistorial(a, ctx.lunes);
   const horas = +a.horas > 0 ? a.horas * 60 : disponible * 0.8;
-  const E = Math.max(horas * vol - fijos, resis.length * 25);
+  // la fuerza nueva cuenta a medias dentro de la progresión (+10 %) sobre lo que ya hacía
+  const E = hist != null ? Math.max(Math.min(hist - fijos * 0.5, disponible * 0.85) * vol, resis.length * 20) : Math.max(horas * vol - fijos, resis.length * 25);
   const asignar = (lista, total) => {
     let libres = lista.slice();
     for (let it = 0; it < 4 && libres.length; it++) {
@@ -392,7 +418,7 @@ function duraciones(a, semana, F, ctx, Z) {
       const resto = total - lista.filter(s => !libres.includes(s)).reduce((t, s) => t + s.min, 0);
       const sig = [];
       for (const s of libres) {
-        const m = resto * PESO[s.tipo] * (MULT[s.dep] || 1) / W, tope = topes(a, s, ctx.obj);
+        const m = resto * PESO[s.tipo] * (MULT[s.dep] || 1) / W, tope = topes(a, s, ctx.obj, ctx.lunes);
         if (m > tope) s.min = tope; else { s.min = m; sig.push(s); }
       }
       if (sig.length === libres.length) break;
@@ -400,6 +426,11 @@ function duraciones(a, semana, F, ctx, Z) {
     }
   };
   asignar(resis, E);
+  // con historial, la tirada larga no baja de lo que ya hace (y crece poco a poco)
+  if (a.hist?.largoRun && !F.descarga && !["puesta", "carrera"].includes(F.f)) {
+    const w = clamp(Math.floor(diasEntre(lunesDe(a.hist.fecha), ctx.lunes) / 7), 0, 12);
+    for (const s of resis) if (s.dep === "run" && s.tipo === "largo") s.min = Math.max(s.min, Math.min(topes(a, s, ctx.obj, ctx.lunes), a.hist.largoRun + 5 * w));
+  }
 
   // Límite por día
   let perdido = 0;
@@ -438,7 +469,7 @@ function duraciones(a, semana, F, ctx, Z) {
       if (d < 0) continue;
       const max = +dispDia(a, d).max || 9999;
       const usado = semana[d].reduce((t, x) => t + x.min, 0);
-      const extra = Math.min(perdido, topes(a, s, ctx.obj) - s.min, max - usado);
+      const extra = Math.min(perdido, topes(a, s, ctx.obj, ctx.lunes) - s.min, max - usado);
       if (extra > 0) { s.min += extra; perdido -= extra; }
     }
   }
@@ -828,6 +859,7 @@ function platoTxt(plato, a, chMeta, protMeta) {
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
 export function generarSemana(a, lunes) {
+  a = efectivo(a);
   const ctx = contexto(a, lunes);
   const F = calcFase(a, ctx);
   const Z = calcZonas(a);

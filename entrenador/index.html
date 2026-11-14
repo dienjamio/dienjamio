@@ -38,6 +38,10 @@
       <fieldset>
         <legend>1 · Datos personales</legend>
         <label>Nombre <input name="nombre" required placeholder="Ej.: Laura Martín"></label>
+        <div class="g2">
+          <label>Teléfono <input name="telefono" type="tel" placeholder="Para mandarle su enlace por WhatsApp"></label>
+          <label>Correo <input name="email" type="email" placeholder="opcional"></label>
+        </div>
         <div class="g3">
           <label>Sexo <select name="sexo"><option value="h">Hombre</option><option value="m">Mujer</option></select></label>
           <label>Edad <input name="edad" type="number" min="12" max="90" required></label>
@@ -134,6 +138,13 @@
         <label>Notas privadas (solo las ves tú) <textarea name="notas" rows="2" placeholder="Lesiones antiguas, cómo responde, preferencias…"></textarea></label>
         <label>Mensaje para el deportista (lo ve en su enlace) <textarea name="mensaje" rows="2" placeholder="Ej.: Esta semana céntrate en dormir bien. ¡A tope!"></textarea></label>
         <small>Las notas no cambian los entrenos. Los límites de tiempo van en «Disponibilidad» y cualquier sesión se puede cambiar a mano en su semana.</small>
+      </fieldset>
+
+      <fieldset>
+        <legend>8 · Historial de entrenos <span class="opc">(recomendado)</span></legend>
+        <p class="ayuda">Con sus actividades de los últimos meses el plan arranca de lo que hace de verdad: su volumen, su tirada más larga, su pulso real y sus marcas. Lo que escribas arriba manda; lo que dejes vacío lo sacan sus datos.</p>
+        <div id="subida-form"></div>
+        <div id="form-hist-msg"></div>
       </fieldset>
 
       <div class="acciones">

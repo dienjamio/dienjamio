@@ -1,9 +1,9 @@
 /* App del entrenador */
 import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js";
-import { generarSemana, recalcular, calcZonas, sesionVacia, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js";
+import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js";
 import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha } from "./vista.js";
 import * as A from "./almacen.js";
-import { leerArchivo, resumen } from "./importar.js";
+import { leerArchivo, resumen, fusionar } from "./importar.js";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -139,7 +139,7 @@ function nuevoAtleta(datos) {
 function escribirForm(a) {
   const f = $("#form");
   const set = (n, v) => { f.elements[n].value = v ?? ""; };
-  ["nombre", "sexo", "edad", "nivel", "peso", "altura", "objetivo", "lesionZona", "horas", "descanso", "ftp", "css", "dieta", "comidas", "notas", "mensaje", "inicio"].forEach(n => set(n, a[n]));
+  ["nombre", "telefono", "email", "sexo", "edad", "nivel", "peso", "altura", "objetivo", "lesionZona", "horas", "descanso", "ftp", "css", "dieta", "comidas", "notas", "mensaje", "inicio"].forEach(n => set(n, a[n]));
   set("fcmax", a.fc?.max); set("fcrep", a.fc?.rep); set("fcumbral", a.fc?.umbral);
   set("m5k", a.marcas?.["5k"]); set("m10k", a.marcas?.["10k"]); set("mmedia", a.marcas?.media); set("mmaraton", a.marcas?.maraton);
   ["run", "bike", "swim", "fuerza"].forEach(n => { f.elements[n].checked = !!a.deportes?.[n]; });
@@ -157,7 +157,7 @@ function leerForm() {
   const disp = DIAS.map((_, i) => ({ on: $(`[data-dia="${i}"]`).checked, max: leerMin($(`[data-max="${i}"]`).value) }));
   const zonas = $("#zonas-propias").checked ? [0, 1, 2, 3, 4].map(i => [+$(`[data-zlo="${i}"]`).value, +$(`[data-zhi="${i}"]`).value]) : null;
   return {
-    nombre: v("nombre"), sexo: v("sexo"), edad: num("edad"), nivel: v("nivel"), peso: num("peso"), altura: num("altura"),
+    nombre: v("nombre"), telefono: v("telefono"), email: v("email"), sexo: v("sexo"), edad: num("edad"), nivel: v("nivel"), peso: num("peso"), altura: num("altura"),
     objetivo: v("objetivo"), lesionZona: v("lesionZona"),
     deportes: { run: f.elements.run.checked, bike: f.elements.bike.checked, swim: f.elements.swim.checked, fuerza: f.elements.fuerza.checked },
     inicio: v("inicio") ? lunesDe(v("inicio")) : proximoLunes(),
@@ -197,12 +197,14 @@ async function guardarForm(e) {
       const a = nuevoAtleta(d);
       a.semanas = {};
       await A.guardarFicha(a);
+      if (await guardarPendientes(a)) await A.guardarFicha(a);
       atletas.push(a);
       actual = a;
       await asegurarSemanas(a);
       toast(`${a.nombre} creado. Su plan ya está listo.`);
     } else {
       Object.assign(editando, d);
+      await guardarPendientes(editando);
       await A.guardarFicha(editando);
       const r = await actualizarFuturas(editando);
       toast(r);
@@ -220,6 +222,7 @@ function formNuevo() {
   $("#form-titulo").textContent = "Nuevo deportista";
   $("#btn-guardar").textContent = "Crear deportista y generar su plan";
   $("#btn-borrar").hidden = true;
+  prepararSubidaForm();
   vista("nuevo");
 }
 function formEditar() {
@@ -228,6 +231,7 @@ function formEditar() {
   $("#form-titulo").textContent = `Ficha de ${actual.nombre}`;
   $("#btn-guardar").textContent = "Guardar cambios";
   $("#btn-borrar").hidden = false;
+  prepararSubidaForm();
   vista("nuevo");
   $$("#pestanas [data-vista]").forEach(b => b.setAttribute("aria-selected", b.dataset.vista === "atleta"));
 }
@@ -305,7 +309,7 @@ function pintarAtleta() {
       <code>${A.nube ? esc(enlace(a)) : "Disponible al conectar Firebase"}</code>
       <div class="fila">
         <button class="btn pri mini" data-acc="copiar-enlace" ${A.nube ? "" : "disabled"}>🔗 Copiar enlace</button>
-        <button class="btn sec mini" data-acc="compartir" ${A.nube ? "" : "disabled"}>📤 Enviar</button>
+        <button class="btn sec mini" data-acc="compartir" ${A.nube ? "" : "disabled"}>${a.telefono ? "💬 Enviar por WhatsApp" : "📤 Enviar"}</button>
         <a class="btn sec mini" href="${A.nube ? esc(enlace(a)) : "#"}" target="_blank" rel="noopener" ${A.nube ? "" : 'aria-disabled="true"'}>👁️ Ver como él</a>
       </div>
     </div>`;
@@ -375,97 +379,152 @@ async function cerrarCarrera(accion) {
 }
 
 /* ---------------- Datos importados ---------------- */
+const PERIODOS = { 3: "3 meses", 6: "6 meses", 12: "1 año" };
+let periodo = 6;
+const desdePeriodo = () => sumaDias(hoy(), -Math.round(periodo * 30.5));
+const AYUDA = `<details class="como"><summary>¿Cómo consigue el deportista ese ZIP?</summary>
+  <p>Lo pide él desde su cuenta (le lleva 2 minutos) y te lo manda por WhatsApp o correo. Tú lo subes aquí <b>sin descomprimir</b>. Nadie tiene que darte su contraseña.</p>
+  <ul>
+    <li><b>Garmin</b>: en un ordenador, entra en garmin.com con su cuenta → «Gestión de datos» → «Exportar tus datos» → «Solicitar exportación». Le llega un correo con el ZIP (puede tardar de unas horas a varios días). Si corre prisa: Garmin Connect web → Actividades → «Exportar CSV» (solo el resumen de cada actividad).</li>
+    <li><b>Strava</b>: strava.com → Ajustes → Mi cuenta → «Descargar o eliminar tu cuenta» → «Solicitar tu archivo». Le llega un ZIP por correo, normalmente en unas horas.</li>
+    <li><b>Polar</b>: account.polar.com → «Descargar tus datos». Le llega un ZIP por correo.</li>
+    <li><b>Coros, Suunto, Wahoo…</b>: en cada actividad, «Exportar» o «Compartir» como .FIT o .GPX.</li>
+  </ul></details>`;
+function htmlSubida(id) {
+  return `<label class="soltar" id="soltar-${id}">
+      <input type="file" id="f-${id}" multiple accept=".zip,.fit,.gpx,.tcx,.csv,.json,.gz,.pdf,image/*">
+      <b>📂 Sube su historial</b>
+      <span>El <b>ZIP</b> con sus datos de Garmin, Strava o Polar (tal cual llega), actividades sueltas .FIT, .GPX o .TCX, la lista .CSV de actividades, e informes en PDF o foto.</span>
+    </label>
+    <div class="periodo"><span>Usar los últimos</span>${Object.entries(PERIODOS).map(([k, v]) => `<label class="chip"><input type="radio" name="periodo-${id}" value="${k}" ${+k === periodo ? "checked" : ""}> ${v}</label>`).join("")}</div>
+    ${AYUDA}`;
+}
+function enlazarSubida(id, fn) {
+  const zona = $(`#soltar-${id}`);
+  zona.addEventListener("dragover", e => { e.preventDefault(); zona.classList.add("sobre"); });
+  zona.addEventListener("dragleave", () => zona.classList.remove("sobre"));
+  zona.addEventListener("drop", e => { e.preventDefault(); zona.classList.remove("sobre"); fn([...e.dataTransfer.files]); });
+  $(`#f-${id}`).addEventListener("change", e => { fn([...e.target.files]); e.target.value = ""; });
+  $$(`[name="periodo-${id}"]`).forEach(r => r.addEventListener("change", () => { periodo = +r.value; }));
+}
+const esDoc = f => /\.(pdf|png|jpe?g|webp|heic)$/i.test(f.name) || f.type.startsWith("image/") || f.type === "application/pdf";
+async function procesarArchivos(files, avisar) {
+  const desde = desdePeriodo(), acts = [], docs = [], errores = [];
+  for (const f of files) {
+    try {
+      avisar(`Leyendo ${f.name}…`);
+      if (esDoc(f)) {
+        const lim = A.nube ? 700 * 1024 : 10 * 1024 * 1024;
+        if (f.size > lim) throw new Error(`pesa ${Math.round(f.size / 1024)} KB; el máximo es ${Math.round(lim / 1024)} KB (prueba a comprimirlo)`);
+        const datos = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
+        docs.push({ id: uid(10), nombre: f.name, tipo: f.type || "application/pdf", tam: f.size, fecha: hoy(), datos });
+      } else acts.push(...await leerArchivo(f, { desde, progreso: t => avisar(`${f.name}: ${t}`) }));
+    } catch (e) { errores.push(`${f.name}: ${e.message}`); }
+  }
+  return { acts, docs, errores };
+}
+const coma = x => String(x).replace(".", ",");
+function htmlResumenCorto(H) {
+  const p = [`${coma(H.horasMedia)} h/semana`];
+  if (H.kmRun) p.push(`${H.kmRun} km/semana corriendo`);
+  if (H.largoRun) p.push(`tirada más larga ${H.largoRun}'`);
+  if (H.fcMaxObs) p.push(`FC máx ${H.fcMaxObs}`);
+  if (H.lthr) p.push(`umbral ~${H.lthr} ppm`);
+  for (const [k, n] of [["5k", "5 km"], ["10k", "10 km"], ["media", "media"], ["maraton", "maratón"]]) if (H.mejores[k]) p.push(`${n} ${fmtHoras(H.mejores[k].s)}`);
+  if (H.ftpEst) p.push(`FTP ~${H.ftpEst} W`);
+  return p.join(" · ");
+}
+
 async function pintarDatos() {
   const a = actual;
   if (!archivos.length) { try { archivos = await A.listarArchivos(a); } catch (e) { archivos = []; } }
   const acts = (a.actividades || []).slice().sort((x, y) => y.fecha.localeCompare(x.fecha));
-  const R = acts.length ? resumen(acts) : null;
-  const sug = [];
-  if (R) {
-    if (R.fcMaxObs && R.fcMaxObs > (+a.fc?.max || 0)) sug.push({ k: "fcmax", v: R.fcMaxObs, t: `FC máxima registrada: <b>${R.fcMaxObs} ppm</b>${a.fc?.max ? ` (ahora tiene ${a.fc.max})` : ""}` });
-    const nombres = { "5k": "5 km", "10k": "10 km", media: "media maratón", maraton: "maratón" };
-    for (const k of ["5k", "10k", "media", "maraton"]) if (R.mejores[k]) {
-      const actual_ = parseTiempo(a.marcas?.[k]);
-      if (!actual_ || R.mejores[k].s < actual_) sug.push({ k: "marca", d: k, v: fmtHoras(R.mejores[k].s), t: `Mejor ${nombres[k]} en el último año: <b>${fmtHoras(R.mejores[k].s)}</b> (${fechaCorta(R.mejores[k].fecha)})` });
-    }
-    if (R.ftpEst && R.ftpEst !== +a.ftp) sug.push({ k: "ftp", v: R.ftpEst, t: `FTP estimado (95 % de su mejor 20'): <b>${R.ftpEst} W</b>` });
-    const prog = Math.round(R.horasMedia * 1.1 * 2) / 2;
-    if (R.horasMedia && prog !== +a.horas) sug.push({ k: "horas", v: prog, t: `Viene entrenando <b>${String(R.horasMedia).replace(".", ",")} h/semana</b>. Para progresar sin lesiones (+10 %): <b>${String(prog).replace(".", ",")} h</b>` });
+  const H = a.hist, ef = efectivo(a), Z = calcZonas(a);
+  const usa = [], sug = [];
+  if (H) {
+    if (+a.horas > 0) usa.push(`Volumen fijado a mano en la ficha: <b>${coma(a.horas)} h/semana</b>. Bórralo de la ficha si prefieres que lo marquen sus datos.`);
+    else if (H.horasMedia) usa.push(`<b>Volumen</b>: arranca en ${coma(Math.round(H.horasMedia * 11) / 10)} h/semana (+10 % sobre lo que hace) y sube un 5 % cada semana, sin pasar de su disponibilidad.`);
+    if (H.largoRun) usa.push(`<b>Tirada larga</b>: parte de ${H.largoRun}' (la más larga de sus últimas 6 semanas) y crece unos 5' por semana.`);
+    if (ef._de?.fcmax) usa.push(`<b>FC máxima</b>: ${H.fcMaxObs} ppm, la más alta registrada. Si nunca ha apretado a tope, la real será mayor: si la conoces, escríbela en la ficha.`);
+    if (ef._de?.umbral) usa.push(`<b>FC de umbral</b>: ~${H.lthr} ppm, estimada con su mejor esfuerzo de 20' corriendo. Sus zonas salen de aquí.`);
+    for (const [k, n] of [["5k", "5 km"], ["10k", "10 km"], ["media", "media maratón"], ["maraton", "maratón"]]) if (ef._de?.["m" + k]) usa.push(`<b>Marca de ${n}</b>: ${fmtHoras(H.mejores[k].s)} (${fechaCorta(H.mejores[k].fecha)}). De aquí salen sus ritmos.`);
+    if (ef._de?.ftp) usa.push(`<b>FTP</b>: ~${H.ftpEst} W (95 % de su mejor 20').`);
+    // Diferencias con lo escrito en la ficha
+    if (H.fcMaxObs && +a.fc?.max && H.fcMaxObs > +a.fc.max) sug.push({ k: "fcmax", v: H.fcMaxObs, t: `En sus datos aparece una FC máx de <b>${H.fcMaxObs}</b> y la ficha dice ${a.fc.max}.` });
+    for (const k of ["5k", "10k", "media", "maraton"]) if (H.mejores[k] && a.marcas?.[k] && H.mejores[k].s < parseTiempo(a.marcas[k])) sug.push({ k: "marca", d: k, v: fmtHoras(H.mejores[k].s), t: `Ha hecho <b>${fmtHoras(H.mejores[k].s)}</b> en ${k === "media" ? "media maratón" : k === "maraton" ? "maratón" : k.replace("k", " km")} y la ficha dice ${a.marcas[k]}.` });
+    if (H.ftpEst && +a.ftp && Math.abs(H.ftpEst - a.ftp) > 8) sug.push({ k: "ftp", v: H.ftpEst, t: `Su FTP estimado es <b>${H.ftpEst} W</b> y la ficha dice ${a.ftp} W.` });
   }
-  const maxH = R ? Math.max(1, ...R.semanas.map(s => s.horas)) : 1;
+  let intensidad = "";
+  if (H?.suave) {
+    const z = Z.fc.findIndex(r => H.suave.fc <= r[1]) + 1 || 5;
+    intensidad = z <= 2
+      ? `<p class="ok-msg">✅ Sus rodajes suaves (~${fmtRitmo(H.suave.ritmo)} /km a ${H.suave.fc} ppm) van en Z${z}: bien hechos.</p>`
+      : `<p class="alerta">⚠️ Sus rodajes «suaves» van a ${H.suave.fc} ppm (~${fmtRitmo(H.suave.ritmo)} /km): eso es <b>Z${z}</b>, demasiado rápido. El plan se los pone en Z2 (${Z.fc[1][0]}-${Z.fc[1][1]} ppm), aunque tenga que ir más despacio.</p>`;
+  }
+  const maxH = H ? Math.max(1, ...H.semanas.map(s => s.horas)) : 1;
   $("#sub").innerHTML = `
   <article class="dia">
-    <div class="dia-cab"><h3>Subir datos</h3></div>
-    <label class="soltar" id="soltar">
-      <input type="file" id="f-datos" multiple accept=".fit,.gpx,.tcx,.csv,.pdf,image/*">
-      <b>📂 Elige o arrastra archivos</b>
-      <span>Actividades .FIT, .GPX o .TCX (Garmin, Polar, Coros, Suunto, Strava…), la lista de actividades en .CSV de Garmin Connect o Strava, e informes en PDF o foto.</span>
-    </label>
-    <details class="como"><summary>¿Cómo los saco de cada app?</summary>
-      <ul>
-        <li><b>Garmin Connect</b> (web): Actividades → abre una → ⚙️ → «Exportar original» (.FIT). Para la lista: Actividades → «Exportar CSV».</li>
-        <li><b>Strava</b> (web): en una actividad → ⋯ → «Exportar GPX». Todo junto: Ajustes → Mi cuenta → «Descargar o eliminar tu cuenta» → solicitar archivo (trae activities.csv).</li>
-        <li><b>Polar Flow</b>: abre la sesión → «Exportar» → TCX o GPX.</li>
-        <li><b>Coros / Suunto</b>: en la app, comparte la actividad como .FIT o .GPX.</li>
-      </ul>
-    </details>
+    <div class="dia-cab"><h3>Historial de entrenos</h3>${acts.length ? `<span class="muted small">${acts.length} actividades</span>` : ""}</div>
+    ${htmlSubida("datos")}
     <div id="import-msg"></div>
   </article>
-  ${R ? `<article class="dia">
-    <div class="dia-cab"><h3>Lo que dicen sus datos</h3><span class="muted small">${R.n} actividades</span></div>
-    ${sug.length ? `<ul class="sugs">${sug.map((s, i) => `<li><span>${s.t}</span><button class="btn sec mini" data-acc="aplicar" data-i="${i}">Usar</button></li>`).join("")}</ul>
-      <button class="btn pri mini" data-acc="aplicar-todo">Usar todo y rehacer el plan</button>` : `<p class="muted">Sus datos ya coinciden con la ficha.</p>`}
+  ${H ? `<article class="dia">
+    <div class="dia-cab"><h3>Cómo entrena ahora</h3><span class="muted small">últimas 4 semanas</span></div>
+    <div class="kpis">
+      <div class="kpi"><b>${coma(H.horasMedia)} h</b><span>por semana</span></div>
+      <div class="kpi"><b>${H.kmRun || 0} km</b><span>corriendo/semana</span></div>
+      <div class="kpi"><b>${coma(H.sesiones)}</b><span>sesiones/semana</span></div>
+      <div class="kpi"><b>${H.largoRun ? H.largoRun + "'" : "—"}</b><span>tirada más larga</span></div>
+    </div>
+    ${intensidad}
     <h4 class="sep">Horas por semana</h4>
-    <div class="vol">${R.semanas.map(s => `<div class="vol-c" title="${rangoSemana(s.lunes)}: ${s.horas} h"><i style="height:${s.horas / maxH * 100}%"></i><b>${String(s.horas).replace(".", ",")}</b><span>${fechaCorta(s.lunes)}</span></div>`).join("")}</div>
-    <h4 class="sep">Últimas actividades</h4>
-    <div class="wrap"><table class="acts"><tr><th>Fecha</th><th></th><th>Km</th><th>Tiempo</th><th>FC med/máx</th><th></th></tr>
-    ${acts.slice(0, 40).map(x => `<tr><td>${fechaCorta(x.fecha)}</td><td>${DEP[x.dep]?.i || "•"}</td><td>${x.km ? String(x.km).replace(".", ",") : "—"}</td><td>${x.dur ? fmtHoras(x.dur) : "—"}</td><td>${x.fcMed || "—"}/${x.fcMax || "—"}</td><td><button class="quita" data-acc="quitar-act" data-id="${esc(x.id)}" aria-label="Quitar">✕</button></td></tr>`).join("")}
-    </table></div>
+    <div class="vol">${H.semanas.map(s => `<div class="vol-c" title="${rangoSemana(s.lunes)}: ${s.horas} h"><i style="height:${s.horas / maxH * 100}%"></i><b>${coma(s.horas)}</b><span>${fechaCorta(s.lunes)}</span></div>`).join("")}</div>
+  </article>
+  <article class="dia">
+    <div class="dia-cab"><h3>Lo que el plan saca de sus datos</h3></div>
+    ${usa.length ? `<ul class="usa">${usa.map(x => `<li>${x}</li>`).join("")}</ul>` : `<p class="muted">La ficha ya tiene todos los valores escritos a mano; el plan usa los de la ficha.</p>`}
+    ${sug.length ? `<h4 class="sep">No coincide con la ficha</h4><ul class="sugs">${sug.map((s, i) => `<li><span>${s.t}</span><button class="btn sec mini" data-acc="aplicar" data-i="${i}">Usar dato</button></li>`).join("")}</ul>` : ""}
+    <small>Lo que escribas en la ficha manda sobre los datos. Deja un campo vacío para que lo calculen sus actividades.</small>
+  </article>
+  <article class="dia">
+    <div class="dia-cab"><h3>Actividades</h3></div>
+    <div class="wrap"><table class="acts"><tr><th>Fecha</th><th></th><th>Km</th><th>Tiempo</th><th>Ritmo</th><th>FC med/máx</th><th></th></tr>
+    ${acts.slice(0, 60).map(x => `<tr><td>${fechaCorta(x.fecha)}</td><td>${DEP[x.dep]?.i || "•"}</td><td>${x.km ? coma(x.km) : "—"}</td><td>${x.dur ? fmtHoras(x.dur) : "—"}</td><td>${x.dep === "run" && x.km ? fmtRitmo(x.dur / x.km) : x.dep === "bike" && x.km ? coma(Math.round(x.km / x.dur * 36000) / 10) + " km/h" : "—"}</td><td>${x.fcMed || "—"}/${x.fcMax || "—"}</td><td><button class="quita" data-acc="quitar-act" data-id="${esc(x.id)}" aria-label="Quitar">✕</button></td></tr>`).join("")}
+    </table></div>${acts.length > 60 ? `<small>Mostrando las 60 más recientes.</small>` : ""}
   </article>` : ""}
   <article class="dia">
     <div class="dia-cab"><h3>Informes y documentos</h3></div>
-    ${archivos.length ? `<ul class="docs">${archivos.sort((x, y) => y.fecha.localeCompare(x.fecha)).map(x => `<li><span>${x.tipo.includes("pdf") ? "📄" : "🖼️"} <b>${esc(x.nombre)}</b> <span class="muted small">${fechaCorta(x.fecha)} · ${Math.round(x.tam / 1024)} KB</span></span>
+    ${archivos.length ? `<ul class="docs">${archivos.sort((x, y) => y.fecha.localeCompare(x.fecha)).map(x => `<li><span>${x.tipo.includes("pdf") ? "📄" : "🖼️"} <b>${esc(x.nombre)}</b> <span class="muted small">${fechaCorta(x.fecha)} · ${Math.max(1, Math.round(x.tam / 1024))} KB</span></span>
       <span class="fila"><button class="btn sec mini" data-acc="ver-doc" data-id="${x.id}">Abrir</button><button class="quita" data-acc="quitar-doc" data-id="${x.id}" aria-label="Borrar">✕</button></span></li>`).join("")}</ul>`
       : `<p class="muted">Pruebas de esfuerzo, analíticas, informes del fisio… Súbelos arriba y quedan guardados en su ficha.</p>`}
   </article>`;
   pintarDatos.sug = sug;
-  const zona = $("#soltar");
-  zona.addEventListener("dragover", e => { e.preventDefault(); zona.classList.add("sobre"); });
-  zona.addEventListener("dragleave", () => zona.classList.remove("sobre"));
-  zona.addEventListener("drop", e => { e.preventDefault(); zona.classList.remove("sobre"); importar([...e.dataTransfer.files]); });
-  $("#f-datos").addEventListener("change", e => importar([...e.target.files]));
+  enlazarSubida("datos", importar);
+}
+
+/** Añade actividades al deportista y recalcula lo que se deduce de ellas. */
+function anadirActividades(a, nuevas) {
+  const { lista, anadidas } = fusionar(a.actividades || [], nuevas);
+  a.actividades = lista.slice(0, 1500);
+  a.hist = a.actividades.length ? resumen(a.actividades) : null;
+  return anadidas;
 }
 
 async function importar(files) {
   const msg = $("#import-msg");
-  msg.innerHTML = `<p class="cargando">Leyendo ${files.length} archivo${files.length > 1 ? "s" : ""}…</p>`;
   const a = actual;
-  a.actividades = a.actividades || [];
-  let nuevas = 0, docs = 0;
-  const errores = [];
-  for (const f of files) {
-    try {
-      if (/\.(pdf|png|jpe?g|webp|heic)$/i.test(f.name) || f.type.startsWith("image/") || f.type === "application/pdf") {
-        const lim = A.nube ? 700 * 1024 : 10 * 1024 * 1024;
-        if (f.size > lim) throw new Error(`pesa ${Math.round(f.size / 1024)} KB; el máximo es ${Math.round(lim / 1024)} KB (prueba a comprimirlo)`);
-        const datos = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
-        await A.guardarArchivo(a, { id: uid(10), nombre: f.name, tipo: f.type || "application/pdf", tam: f.size, fecha: hoy(), datos });
-        docs++;
-      } else {
-        const acts = await leerArchivo(f);
-        for (const x of acts) {
-          const i = a.actividades.findIndex(y => y.id === x.id);
-          if (i >= 0) a.actividades[i] = { ...a.actividades[i], ...x }; else { a.actividades.push(x); nuevas++; }
-        }
-      }
-    } catch (e) { errores.push(`${f.name}: ${e.message}`); }
-  }
-  a.actividades.sort((x, y) => y.fecha.localeCompare(x.fecha));
-  a.actividades = a.actividades.slice(0, 800);
-  try { await A.guardarFicha(a); } catch (e) { errores.push("No se ha podido guardar: " + e.message); }
+  const r = await procesarArchivos(files, t => { msg.innerHTML = `<p class="cargando">⏳ ${esc(t)}</p>`; });
+  for (const d of r.docs) { try { await A.guardarArchivo(a, d); } catch (e) { r.errores.push(`${d.nombre}: ${e.message}`); } }
+  const nuevas = anadirActividades(a, r.acts);
+  let rehecho = "";
+  try {
+    await A.guardarFicha(a);
+    if (nuevas) { await actualizarFuturas(a); rehecho = " El plan de las próximas semanas se ha rehecho con sus datos."; }
+    await publicar(a);
+  } catch (e) { r.errores.push("No se ha podido guardar: " + e.message); }
   archivos = [];
   await pintarDatos();
-  $("#import-msg").innerHTML = `<p class="ok-msg">✅ ${nuevas} actividad${nuevas === 1 ? "" : "es"} nueva${nuevas === 1 ? "" : "s"}${docs ? ` y ${docs} documento${docs > 1 ? "s" : ""}` : ""}.</p>${errores.length ? `<ul class="errores">${errores.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
+  $("#import-msg").innerHTML = `<p class="ok-msg">✅ ${nuevas} actividad${nuevas === 1 ? "" : "es"} nueva${nuevas === 1 ? "" : "s"}${r.acts.length !== nuevas ? ` (${r.acts.length - nuevas} ya estaban)` : ""}${r.docs.length ? ` y ${r.docs.length} documento${r.docs.length > 1 ? "s" : ""}` : ""}.${rehecho}</p>${r.errores.length ? `<ul class="errores">${r.errores.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
 }
 
 async function aplicarSug(lista) {
@@ -474,13 +533,38 @@ async function aplicarSug(lista) {
     if (s.k === "fcmax") a.fc = { ...a.fc, max: s.v };
     if (s.k === "marca") a.marcas = { ...a.marcas, [s.d]: s.v };
     if (s.k === "ftp") a.ftp = s.v;
-    if (s.k === "horas") a.horas = s.v;
   }
   await A.guardarFicha(a);
   const r = await actualizarFuturas(a);
   await publicar(a);
   toast(r);
   pintarAtleta();
+}
+
+/* ---------------- Historial en el formulario ---------------- */
+let pendientes = { acts: [], docs: [] };
+function prepararSubidaForm() {
+  pendientes = { acts: [], docs: [] };
+  $("#subida-form").innerHTML = htmlSubida("form");
+  $("#form-hist-msg").innerHTML = editando?.hist ? `<p class="muted small">Ya tiene ${editando.actividades.length} actividades: ${htmlResumenCorto(editando.hist)}</p>` : "";
+  enlazarSubida("form", async files => {
+    const msg = $("#form-hist-msg");
+    const r = await procesarArchivos(files, t => { msg.innerHTML = `<p class="cargando">⏳ ${esc(t)}</p>`; });
+    pendientes.acts.push(...r.acts); pendientes.docs.push(...r.docs);
+    const { lista } = fusionar(editando?.actividades || [], pendientes.acts);
+    const H = lista.length ? resumen(lista) : null;
+    msg.innerHTML = `${H ? `<p class="ok-msg">✅ ${lista.length} actividades leídas</p><p class="small">${htmlResumenCorto(H)}</p><p class="muted small">Se usarán al guardar para los campos que dejes vacíos (pulso, marcas, FTP, horas).</p>` : ""}
+      ${pendientes.docs.length ? `<p class="small">📄 ${pendientes.docs.length} documento${pendientes.docs.length > 1 ? "s" : ""} listo${pendientes.docs.length > 1 ? "s" : ""} para guardar.</p>` : ""}
+      ${r.errores.length ? `<ul class="errores">${r.errores.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
+  });
+}
+async function guardarPendientes(a) {
+  if (pendientes.acts.length) anadirActividades(a, pendientes.acts);
+  for (const d of pendientes.docs) { try { await A.guardarArchivo(a, d); } catch (e) { toast(`${d.nombre}: ${e.message}`); } }
+  const habia = pendientes.acts.length > 0;
+  pendientes = { acts: [], docs: [] };
+  archivos = [];
+  return habia;
 }
 
 /* ---------------- Editor de sesión ---------------- */
@@ -566,14 +650,18 @@ function enlazar() {
     if (acc === "nueva-carrera") return abrirCarrera(null);
     if (acc === "editar-carrera") return abrirCarrera(t.dataset.id);
     if (acc === "copiar-enlace") { try { await navigator.clipboard.writeText(enlace(a)); toast("Enlace copiado. Mándaselo una vez: siempre verá lo último."); } catch (e) { prompt("Copia el enlace:", enlace(a)); } return; }
+    if (acc === "compartir" && a.telefono) {
+      let tel = a.telefono.replace(/\D/g, ""); if (tel.length === 9) tel = "34" + tel;
+      window.open(`https://wa.me/${tel}?text=${encodeURIComponent(`Hola ${a.nombre.split(" ")[0]}, aquí tienes tus entrenos y tu menú. Guárdalo: se actualiza solo.\n${enlace(a)}`)}`, "_blank");
+      return;
+    }
     if (acc === "compartir") {
       if (navigator.share) { try { await navigator.share({ title: `Plan de ${a.nombre}`, text: `Hola ${a.nombre.split(" ")[0]}, aquí tienes tus entrenos y tu menú. Guárdalo: se actualiza solo.`, url: enlace(a) }); } catch (e) { } }
       else { await navigator.clipboard.writeText(enlace(a)).catch(() => {}); toast("Enlace copiado"); }
       return;
     }
     if (acc === "aplicar") return aplicarSug([pintarDatos.sug[+t.dataset.i]]);
-    if (acc === "aplicar-todo") return aplicarSug(pintarDatos.sug);
-    if (acc === "quitar-act") { a.actividades = a.actividades.filter(x => x.id !== t.dataset.id); await A.guardarFicha(a); return pintarDatos(); }
+    if (acc === "quitar-act") { a.actividades = a.actividades.filter(x => x.id !== t.dataset.id); a.hist = a.actividades.length ? resumen(a.actividades) : null; await A.guardarFicha(a); return pintarDatos(); }
     if (acc === "ver-doc") {
       const d = await A.leerArchivoGuardado(a, t.dataset.id);
       if (!d) return toast("No encuentro el archivo");

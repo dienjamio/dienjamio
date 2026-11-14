@@ -4,13 +4,164 @@ import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js";
 
 const DISTANCIAS = { "1k": 1000, "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 
-export async function leerArchivo(file) {
-  const nombre = file.name.toLowerCase();
-  if (nombre.endsWith(".fit")) return [deSerie(leerFIT(await file.arrayBuffer()), "FIT", file.name)];
-  if (nombre.endsWith(".gpx")) return [deSerie(leerGPX(await file.text()), "GPX", file.name)];
-  if (nombre.endsWith(".tcx")) return [deSerie(leerTCX(await file.text()), "TCX", file.name)];
-  if (nombre.endsWith(".csv")) return leerCSV(await file.text());
-  throw new Error("Formato no reconocido: usa .fit, .gpx, .tcx o .csv");
+/** Lee un archivo (o un ZIP con todo el historial) y devuelve las actividades desde la fecha `desde`.
+    opt.progreso(texto) informa del avance en los ZIP grandes. */
+export async function leerArchivo(file, opt = {}) {
+  const desde = opt.desde || "0000";
+  const acts = await leerBlob(file, file.name, opt, 0);
+  return acts.filter(a => a.fecha >= desde);
+}
+const ext = n => n.toLowerCase().replace(/\.gz$/, "").split(".").pop();
+async function leerBlob(blob, nombre, opt, prof) {
+  const n = nombre.toLowerCase();
+  if (n.endsWith(".zip")) return deZip(blob, opt, prof);
+  let datos = blob;
+  if (n.endsWith(".gz")) datos = new Blob([await gunzip(new Uint8Array(await blob.arrayBuffer()))]);
+  const e = ext(n);
+  if (e === "fit") return [deSerie(leerFIT(await datos.arrayBuffer()), "FIT", nombre)];
+  if (e === "gpx") return [deSerie(leerGPX(await datos.text()), "GPX", nombre)];
+  if (e === "tcx") return [deSerie(leerTCX((await datos.text()).trim()), "TCX", nombre)];
+  if (e === "csv") return leerCSV(await datos.text());
+  if (e === "json") return deJSON(await datos.text(), nombre);
+  throw new Error("Formato no reconocido: usa .zip, .fit, .gpx, .tcx, .csv o .json");
+}
+
+/* ---------------- ZIP (exportaciones completas de Garmin, Strava y Polar) ---------------- */
+const gunzip = async u8 => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+async function abrirZip(blob) {
+  const tam = blob.size, finLen = Math.min(tam, 65557);
+  const fin = new DataView(await blob.slice(tam - finLen).arrayBuffer());
+  let eocd = -1;
+  for (let i = finLen - 22; i >= 0; i--) if (fin.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("El ZIP está dañado o incompleto");
+  let n = fin.getUint16(eocd + 10, true), cdSize = fin.getUint32(eocd + 12, true), cdOff = fin.getUint32(eocd + 16, true);
+  const loc = eocd - 20;
+  if ((cdOff === 0xFFFFFFFF || n === 0xFFFF) && loc >= 0 && fin.getUint32(loc, true) === 0x07064b50) {
+    const off64 = Number(fin.getBigUint64(loc + 8, true));
+    const e = new DataView(await blob.slice(off64, off64 + 56).arrayBuffer());
+    n = Number(e.getBigUint64(32, true)); cdSize = Number(e.getBigUint64(40, true)); cdOff = Number(e.getBigUint64(48, true));
+  }
+  const cd = new DataView(await blob.slice(cdOff, cdOff + cdSize).arrayBuffer());
+  const dec = new TextDecoder(), entradas = [];
+  let p = 0;
+  for (let i = 0; i < n && p + 46 <= cdSize; i++) {
+    if (cd.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = cd.getUint16(p + 10, true);
+    let comp = cd.getUint32(p + 20, true), size = cd.getUint32(p + 24, true), off = cd.getUint32(p + 42, true);
+    const ln = cd.getUint16(p + 28, true), le = cd.getUint16(p + 30, true), lc = cd.getUint16(p + 32, true);
+    const nombre = dec.decode(new Uint8Array(cd.buffer, p + 46, ln));
+    if (comp === 0xFFFFFFFF || size === 0xFFFFFFFF || off === 0xFFFFFFFF) {
+      let q = p + 46 + ln; const fin_ = q + le;
+      while (q + 4 <= fin_) {
+        const id = cd.getUint16(q, true), l = cd.getUint16(q + 2, true);
+        if (id === 1) { let r = q + 4; if (size === 0xFFFFFFFF) { size = Number(cd.getBigUint64(r, true)); r += 8; } if (comp === 0xFFFFFFFF) { comp = Number(cd.getBigUint64(r, true)); r += 8; } if (off === 0xFFFFFFFF) off = Number(cd.getBigUint64(r, true)); }
+        q += 4 + l;
+      }
+    }
+    if (!nombre.endsWith("/")) entradas.push({ nombre, metodo, comp, size, off });
+    p += 46 + ln + le + lc;
+  }
+  const blobDe = async e => {
+    const h = new DataView(await blob.slice(e.off, e.off + 30).arrayBuffer());
+    const ini = e.off + 30 + h.getUint16(26, true) + h.getUint16(28, true);
+    const datos = blob.slice(ini, ini + e.comp);
+    if (e.metodo === 0) return datos;
+    if (e.metodo === 8) return new Response(datos.stream().pipeThrough(new DecompressionStream("deflate-raw"))).blob();
+    throw new Error("Compresión del ZIP no soportada");
+  };
+  return { entradas, blobDe };
+}
+const numDe = n => Math.max(0, ...(n.match(/\d{4,}/g) || ["0"]).map(Number));
+async function deZip(blob, opt, prof) {
+  const z = await abrirZip(blob);
+  const desde = opt.desde || "0000";
+  const out = [];
+  const avisar = t => opt.progreso && opt.progreso(t);
+  // 1) resúmenes (rápidos): lista de actividades de Strava / Garmin
+  for (const e of z.entradas.filter(e => /(^|\/)activities\.csv$/i.test(e.nombre) || /summarizedActivities.*\.json$/i.test(e.nombre))) {
+    try { out.push(...await leerBlob(await z.blobDe(e), e.nombre, opt, prof + 1)); } catch (err) { console.warn(e.nombre, err); }
+  }
+  // 2) actividades con detalle (FIT/GPX/TCX y sesiones de Polar), de la más reciente a la más antigua
+  const det = z.entradas.filter(e => /\.(fit|gpx|tcx)(\.gz)?$/i.test(e.nombre) || /training-session.*\.json$/i.test(e.nombre))
+    .sort((a, b) => numDe(b.nombre) - numDe(a.nombre) || b.nombre.localeCompare(a.nombre));
+  let viejas = 0, hechas = 0;
+  for (const e of det) {
+    if (viejas >= 25 || hechas >= 1500) break;
+    try {
+      const r = await leerBlob(await z.blobDe(e), e.nombre.split("/").pop(), opt, prof + 1);
+      for (const a of r) { if (a.fecha >= desde) { out.push(a); viejas = 0; } else viejas++; }
+    } catch (err) { /* archivo no legible: se salta */ }
+    if (++hechas % 20 === 0) avisar(`Leyendo actividades… ${hechas}`);
+  }
+  // 3) ZIP dentro del ZIP (Garmin guarda así los FIT originales)
+  if (prof < 2) for (const e of z.entradas.filter(e => /\.zip$/i.test(e.nombre))) {
+    try { out.push(...await deZip(await z.blobDe(e), opt, prof + 1)); } catch (err) { console.warn(e.nombre, err); }
+  }
+  if (!out.length && prof === 0) throw new Error("No he encontrado actividades en el ZIP");
+  return out;
+}
+
+/* ---------------- JSON: resumen de Garmin y sesiones de Polar ---------------- */
+const durISO = d => { if (typeof d === "number") return d; const m = String(d || "").match(/P(?:\d+D)?T?(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?/); return m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0; };
+function deJSON(txt, nombre) {
+  const j = JSON.parse(txt);
+  const lista = (Array.isArray(j) ? j : [j]).flatMap(x => x?.summarizedActivitiesExport || []);
+  if (lista.length) return deGarminJSON(lista);
+  return [dePolar(j, nombre)];
+}
+function deGarminJSON(lista) {
+  const med = arr => { const v = arr.filter(x => x > 0).sort((a, b) => a - b); return v[Math.floor(v.length / 2)] || 0; };
+  const fDist = med(lista.map(x => x.distance)) > 100000 ? 0.01 : 1;   // Garmin da centímetros
+  const fDur = med(lista.map(x => x.duration)) > 50000 ? 0.001 : 1;    // y milisegundos
+  return lista.map(x => {
+    const t = x.startTimeLocal ?? x.startTimeGmt ?? x.beginTimestamp;
+    if (!t) return null;
+    const dep = deporteDe(x.activityType?.typeKey || x.activityType || x.sportType || x.name);
+    const km = Math.round((x.distance || 0) * fDist / 10) / 100, dur = Math.round((x.duration || x.elapsedDuration || 0) * fDur);
+    const act = { id: `${iso(new Date(t))}-${dep}-${Math.round(km * 100)}-${dur}`, fecha: iso(new Date(t)), dep, fuente: "Garmin", km, dur,
+      fcMed: x.avgHr ? Math.round(x.avgHr) : null, fcMax: x.maxHr ? Math.round(x.maxHr) : null, potMed: x.avgPower ? Math.round(x.avgPower) : null, mejores: {} };
+    if (x.max20MinPower) act.p20 = Math.round(x.max20MinPower);
+    if (dep === "run") marcasPorDistancia(act);
+    return act;
+  }).filter(Boolean);
+}
+function dePolar(j, nombre) {
+  const ex = (j.exercises && j.exercises[0]) || j;
+  const sport = ex.sport || j.sport || ex.sportId || nombre;
+  const inicio = Date.parse(ex.startTime || j.startTime);
+  if (isNaN(inicio)) throw new Error("JSON sin fecha de inicio");
+  const hr = ex.heartRate || j.heartRate || {};
+  const muestras = ex.samples || j.samples || {};
+  const serie = (k) => Array.isArray(muestras[k]) ? muestras[k] : [];
+  const fcS = serie("heartRate"), dS = serie("distance");
+  const puntos = [];
+  if (fcS.length) {
+    const dist = new Map(dS.map(x => [x.dateTime, x.value]));
+    for (const x of fcS) { const t = Date.parse(x.dateTime); if (!isNaN(t)) puntos.push({ t, hr: x.value, d: dist.get(x.dateTime) ?? null, lat: null, lon: null }); }
+  }
+  let ultD = null; for (const p of puntos) { if (p.d == null) p.d = ultD; else ultD = p.d; }
+  if (puntos.length && puntos.every(p => p.d == null)) puntos.forEach(p => { delete p.d; });
+  return deSerie({ deporte: sport, puntos, resumen: { deporte: sport, inicio, dur: durISO(ex.duration || j.duration), dist: ex.distance ?? j.distance ?? null, fcMed: hr.avg ?? hr.average ?? null, fcMax: hr.max ?? hr.maximum ?? null } }, "Polar", nombre);
+}
+function marcasPorDistancia(act) {
+  if (!act.dur || !act.km) return;
+  for (const [k, D] of Object.entries(DISTANCIAS)) if (Math.abs(act.km * 1000 - D) / D < 0.02) act.mejores[k] = Math.round(act.dur * D / (act.km * 1000));
+}
+
+/** Junta actividades nuevas con las que ya había, sin duplicar la misma actividad venida de dos sitios. */
+export function fusionar(viejas, nuevas) {
+  const lista = viejas.slice();
+  let anadidas = 0;
+  for (const x of nuevas) {
+    const y = lista.find(y => y.id === x.id || (y.fecha === x.fecha && y.dep === x.dep &&
+      ((x.dur && y.dur && Math.abs(x.dur - y.dur) <= Math.max(90, 0.04 * y.dur)) || (x.km > 0.5 && y.km > 0.5 && Math.abs(x.km - y.km) <= 0.03 * y.km + 0.05))));
+    if (!y) { lista.push(x); anadidas++; continue; }
+    for (const [k, v] of Object.entries(x)) if (v != null && (y[k] == null || k === "hr20" || k === "p20")) y[k] = v;
+    for (const [k, v] of Object.entries(x.mejores || {})) if (!y.mejores?.[k] || v < y.mejores[k]) (y.mejores = y.mejores || {})[k] = v;
+    if (x.fcMax && (!y.fcMax || x.fcMax > y.fcMax)) y.fcMax = x.fcMax;
+  }
+  lista.sort((a, b) => b.fecha.localeCompare(a.fecha));
+  return { lista, anadidas };
 }
 
 /* ---------------- Series → resumen ---------------- */
@@ -78,6 +229,8 @@ function deSerie(s, fuente, archivo) {
   };
   if (dep === "run" && pts.length > 10) for (const [k, D] of Object.entries(DISTANCIAS)) if (dist >= D) { const b = mejorTiempo(t, d, D); if (b) act.mejores[k] = b; }
   const pot = pts.map(p => p.w);
+  const hrS = pts.map(p => (p.hr > 40 && p.hr < 230) ? p.hr : null);
+  if (hrS.filter(Boolean).length > 100 && dur >= 1200) { const m = mejorPotencia(t, hrS, 1200); if (m) act.hr20 = m; }
   if (dep === "bike" && pot.some(x => x > 0)) { act.p20 = mejorPotencia(t, pot, 1200); if (!act.potMed) act.potMed = Math.round(pot.reduce((x, y) => x + (y || 0), 0) / pot.length); }
   return act;
 }
@@ -247,7 +400,7 @@ function leerCSV(txt) {
       fcMed: cFcMed >= 0 ? numero(f[cFcMed]) : null, fcMax: cFcMax >= 0 ? numero(f[cFcMax]) : null,
       potMed: cPot >= 0 ? numero(f[cPot]) : null, mejores: {}
     };
-    if (dep === "run" && act.dur && act.km) for (const [k, D] of Object.entries(DISTANCIAS)) if (Math.abs(act.km * 1000 - D) / D < 0.02) act.mejores[k] = Math.round(act.dur * D / (act.km * 1000));
+    if (dep === "run") marcasPorDistancia(act);
     out.push(act);
   }
   if (!out.length) throw new Error("No he encontrado actividades en el CSV");
@@ -272,7 +425,20 @@ export function resumen(acts) {
     semanas.push({ lunes: l, run: sum(w, "run", "km"), bike: sum(w, "bike", "km"), swim: sum(w, "swim", "km"), horas: Math.round(w.reduce((t, a) => t + (a.dur || 0), 0) / 360) / 10, n: w.length });
   }
   const ult4 = semanas.slice(3, 7); // 4 semanas completas anteriores a la actual
-  const horasMedia = Math.round(ult4.reduce((t, s) => t + s.horas, 0) / 4 * 2) / 2;
-  return { n: acts.length, fcMaxObs, mejores, ftpEst: p20 ? Math.round(p20 * 0.95) : null, semanas, horasMedia };
+  const horasMedia = Math.round(ult4.reduce((t, s) => t + s.horas, 0) / 4 * 10) / 10;
+  const kmRun = Math.round(ult4.reduce((t, s) => t + s.run, 0) / 4);
+  const sesiones = Math.round(ult4.reduce((t, s) => t + s.n, 0) / 4 * 10) / 10;
+  // Tirada más larga de las últimas 6 semanas
+  const runs6 = acts.filter(a => a.dep === "run" && a.fecha >= sumaDias(h, -42));
+  const largoRun = runs6.length ? Math.round(Math.max(...runs6.map(a => a.dur || 0)) / 60) : null;
+  // FC de umbral estimada: 95 % de su mejor media de 20' en carrera (si fue un esfuerzo fuerte)
+  const hr20 = Math.max(0, ...acts.filter(a => a.dep === "run" && a.fecha >= sumaDias(h, -180)).map(a => a.hr20 || 0));
+  const lthr = hr20 && (!fcMaxObs || hr20 >= 0.84 * fcMaxObs) ? Math.round(hr20 * 0.95) : null;
+  // Cómo hace los rodajes suaves: la mitad más lenta de sus carreras recientes
+  const conFC = acts.filter(a => a.dep === "run" && a.fecha >= sumaDias(h, -56) && a.fcMed && a.km >= 3 && a.dur).map(a => ({ ritmo: a.dur / a.km, fc: a.fcMed })).sort((x, y) => y.ritmo - x.ritmo);
+  const lentas = conFC.slice(0, Math.max(1, Math.ceil(conFC.length / 2)));
+  const mediana = arr => arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)];
+  const suave = conFC.length >= 3 ? { ritmo: Math.round(mediana(lentas.map(x => x.ritmo))), fc: Math.round(mediana(lentas.map(x => x.fc))), n: conFC.length } : null;
+  return { fecha: h, n: acts.length, fcMaxObs, mejores, ftpEst: p20 ? Math.round(p20 * 0.95) : null, semanas, horasMedia, kmRun, sesiones, largoRun, lthr, suave };
 }
 const sum = (w, dep, k) => Math.round(w.filter(a => a.dep === dep).reduce((t, a) => t + (a[k] || 0), 0) * 10) / 10;
