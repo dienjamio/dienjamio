@@ -1,13 +1,13 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141826";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141826";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades } from "./vista.js?v=202611141826";
-import { BIBLIO } from "./biblioteca.js?v=202611141826";
-import { leerTrack, prevision } from "./carrera.js?v=202611141826";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141826";
-import { calcProgreso } from "./progreso.js?v=202611141826";
-import * as A from "./almacen.js?v=202611141826";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141826";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141838";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141838";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141838";
+import { BIBLIO } from "./biblioteca.js?v=202611141838";
+import { leerTrack, prevision } from "./carrera.js?v=202611141838";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141838";
+import { calcProgreso } from "./progreso.js?v=202611141838";
+import * as A from "./almacen.js?v=202611141838";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141838";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -353,7 +353,7 @@ async function publicar(a) {
       progreso,
       videos: ajustes.videos || {},
       actividades: (a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep))
-        .map(({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente }) => ({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente })),
+        .map(({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det }) => ({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det })),
       zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo },
       semanas
     });
@@ -978,6 +978,8 @@ async function pintarDatos() {
 function anadirActividades(a, nuevas, medidas = []) {
   const { lista, anadidas } = fusionar(a.actividades || [], nuevas);
   a.actividades = lista.slice(0, 1500);
+  // el detalle (parciales, gráficas, recorrido) se guarda solo de las 40 más recientes, para no pasar del tamaño máximo
+  a.actividades.forEach((x, i) => { if (i >= 40 && x.det) delete x.det; });
   const m = new Map((a.medidas || []).map(x => [x.medida + x.fecha, x]));
   for (const x of medidas) m.set(x.medida + x.fecha, x);
   a.medidas = [...m.values()].sort((x, y) => y.fecha.localeCompare(x.fecha)).slice(0, 400);
@@ -1112,6 +1114,7 @@ function enlazar() {
     if (t.dataset.sub) { sub = t.dataset.sub; return pintarAtleta(); }
     if (t.dataset.herr) { subH = t.dataset.herr; return pintarHerr(); }
     if (t.dataset.acc === "ejercicio") return mostrarEjercicio(t.dataset.n, ajustes.videos || {});
+    if (t.dataset.acc === "ver-act") return mostrarActividad(actPorClave(t.dataset.k));
     if (await accionHerr(t)) return;
     const acc = t.dataset.acc, a = actual;
     if (acc === "ficha") return formEditar();

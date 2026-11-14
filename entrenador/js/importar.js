@@ -1,6 +1,6 @@
 /* Lectura de archivos de actividad: FIT, GPX, TCX y CSV (Garmin Connect / Strava).
    Todo se procesa en el navegador; solo se guarda el resumen de cada actividad. */
-import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141826";
+import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141838";
 
 const DISTANCIAS = { "1k": 1000, "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 
@@ -121,6 +121,9 @@ function deGarminJSON(lista) {
     const act = { id: `${iso(new Date(t))}-${dep}-${Math.round(km * 100)}-${dur}`, fecha: iso(new Date(t)), dep, fuente: "Garmin", km, dur, titulo: x.name ? String(x.name).slice(0, 60) : undefined,
       fcMed: x.avgHr ? Math.round(x.avgHr) : null, fcMax: x.maxHr ? Math.round(x.maxHr) : null, potMed: x.avgPower ? Math.round(x.avgPower) : null, mejores: {} };
     if (x.max20MinPower) act.p20 = Math.round(x.max20MinPower);
+    if (x.elevationGain != null) act.sube = Math.round(x.elevationGain * fDist);
+    if (x.calories) act.kcal = Math.round(x.calories);
+    if (x.avgRunCadence || x.avgDoubleCadence) act.cad = Math.round(x.avgDoubleCadence || x.avgRunCadence * 2);
     if (dep === "run") marcasPorDistancia(act);
     return act;
   }).filter(Boolean);
@@ -162,7 +165,7 @@ export function fusionar(viejas, nuevas) {
         || (x.dur && y.dur && Math.abs(x.dur - y.dur) <= Math.max(90, 0.04 * y.dur) && (!(x.km > 0.5) || !(y.km > 0.5))))));
     if (!y) { lista.push(x); anadidas++; continue; }
     if (y.dep === "otro" && x.dep !== "otro") y.dep = x.dep;
-    for (const [k, v] of Object.entries(x)) if (v != null && (y[k] == null || k === "hr20" || k === "p20")) y[k] = v;
+    for (const [k, v] of Object.entries(x)) if (v != null && (y[k] == null || k === "hr20" || k === "p20" || k === "det")) y[k] = v;
     for (const [k, v] of Object.entries(x.mejores || {})) if (!y.mejores?.[k] || v < y.mejores[k]) (y.mejores = y.mejores || {})[k] = v;
     if (x.fcMax && (!y.fcMax || x.fcMax > y.fcMax)) y.fcMax = x.fcMax;
   }
@@ -245,7 +248,58 @@ function deSerie(s, fuente, archivo) {
   const hrS = pts.map(p => (p.hr > 40 && p.hr < 230) ? p.hr : null);
   if (hrS.filter(Boolean).length > 100 && dur >= 1200) { const m = mejorPotencia(t, hrS, 1200); if (m) act.hr20 = m; }
   if (dep === "bike" && pot.some(x => x > 0)) { act.p20 = mejorPotencia(t, pot, 1200); if (!act.potMed) act.potMed = Math.round(pot.reduce((x, y) => x + (y || 0), 0) / pot.length); }
+  if (R.kcal) act.kcal = R.kcal;
+  if (s.nombre) act.titulo = String(s.nombre).slice(0, 60);
+  const cads = pts.map(p => p.cad).filter(x => x > 0);
+  if (cads.length > 20) act.cad = Math.round(cads.reduce((x, y) => x + y, 0) / cads.length * (act.dep === "run" && cads.reduce((x, y) => x + y, 0) / cads.length < 120 ? 2 : 1));
+  if (pts.length > 20) act.det = detalle(pts, t, d, act);
+  if (act.det?.sube != null) act.sube = R.sube ?? act.det.sube;
+  else if (R.sube != null) act.sube = R.sube;
   return act;
+}
+
+/** Detalle de una actividad: parciales por km, serie reducida (pulso, ritmo, altitud) y recorrido. */
+function detalle(pts, t, d, act) {
+  const n = pts.length, dist = d[n - 1] || 0;
+  // altitud suavizada y desnivel positivo
+  let ele = pts.map(p => p.ele);
+  const conAlt = ele.filter(x => x != null).length > n * 0.6;
+  let sube = null;
+  if (conAlt) {
+    let ult = ele.find(x => x != null); ele = ele.map(x => (x == null ? ult : (ult = x)));
+    const sm = ele.map((_, i) => { const a = Math.max(0, i - 4), b = Math.min(n, i + 5); let s = 0; for (let k = a; k < b; k++) s += ele[k]; return s / (b - a); });
+    ele = sm; sube = 0;
+    for (let i = 1; i < n; i++) if (ele[i] > ele[i - 1]) sube += ele[i] - ele[i - 1];
+    sube = Math.round(sube);
+  }
+  // parciales por kilómetro (por 5 km en bici)
+  const paso = act.dep === "bike" ? 5000 : act.dep === "swim" ? 100 : 1000;
+  const parc = [];
+  if (dist >= paso * 0.5) {
+    let i0 = 0;
+    for (let k = paso; ; k += paso) {
+      let j = d.findIndex((x, i) => i > i0 && x >= k);
+      const ultimo = j < 0; if (ultimo) j = n - 1;
+      const dd = d[j] - d[i0], dt = t[j] - t[i0];
+      if (dd > paso * 0.15 && dt > 0) {
+        const hrs = pts.slice(i0, j + 1).map(p => p.hr).filter(x => x > 40 && x < 230);
+        parc.push([Math.round(dd), Math.round(dt), hrs.length ? Math.round(hrs.reduce((x, y) => x + y, 0) / hrs.length) : null, conAlt ? Math.round(ele[j] - ele[i0]) : null]);
+      }
+      if (ultimo || j >= n - 1) break;
+      i0 = j;
+    }
+  }
+  // serie reducida: ~80 puntos [distancia m, pulso, s/km (ritmo suavizado), altitud]
+  const N = Math.min(80, n), serie = [];
+  for (let k = 0; k < N; k++) {
+    const i = Math.round(k * (n - 1) / (N - 1)), a = Math.max(0, i - 6), b = Math.min(n - 1, i + 6);
+    const ritmo = d[b] - d[a] > 5 ? Math.round((t[b] - t[a]) / ((d[b] - d[a]) / 1000)) : null;
+    serie.push([Math.round(d[i]), pts[i].hr > 40 && pts[i].hr < 230 ? pts[i].hr : null, ritmo && ritmo < 1800 ? ritmo : null, conAlt ? Math.round(ele[i]) : null]);
+  }
+  // recorrido: ~100 puntos
+  const geo = pts.filter(p => p.lat != null && p.lon != null && Math.abs(p.lat) > 0.0001);
+  const ruta = geo.length > 10 ? Array.from({ length: Math.min(100, geo.length) }, (_, k) => { const p = geo[Math.round(k * (geo.length - 1) / (Math.min(100, geo.length) - 1))]; return [+p.lat.toFixed(5), +p.lon.toFixed(5)]; }) : null;
+  return { sube, parc, serie, ruta };
 }
 
 /* ---------------- GPX / TCX ---------------- */
@@ -262,9 +316,11 @@ function leerGPX(txt) {
   const puntos = porNombre(doc, "trkpt").map(p => {
     const ext = n => { const e = porNombre(p, n)[0]; return e ? +e.textContent : null; };
     const time = hijo(p, "time")?.textContent;
-    return { lat: +p.getAttribute("lat"), lon: +p.getAttribute("lon"), t: time ? Date.parse(time) : null, hr: ext("hr"), w: ext("power") ?? ext("PowerInWatts") };
+    const el = hijo(p, "ele");
+    return { lat: +p.getAttribute("lat"), lon: +p.getAttribute("lon"), t: time ? Date.parse(time) : null, hr: ext("hr"), w: ext("power") ?? ext("PowerInWatts"), cad: ext("cad"), ele: el ? +el.textContent : null };
   });
-  return { deporte: tipo, puntos };
+  const nombre = porNombre(doc, "trk").map(t => hijo(t, "name")?.textContent).find(Boolean) || porNombre(doc, "metadata").map(m => hijo(m, "name")?.textContent).find(Boolean);
+  return { deporte: tipo, puntos, nombre };
 }
 function leerTCX(txt) {
   const doc = xml(txt);
@@ -279,7 +335,9 @@ function leerTCX(txt) {
     return {
       t: time ? Date.parse(time) : null, d: dEl ? +dEl.textContent : null,
       lat: pos ? +hijo(pos, "LatitudeDegrees")?.textContent : null, lon: pos ? +hijo(pos, "LongitudeDegrees")?.textContent : null,
-      hr: hrEl ? +hijo(hrEl, "Value")?.textContent : null, w: wEl ? +wEl.textContent : null
+      hr: hrEl ? +hijo(hrEl, "Value")?.textContent : null, w: wEl ? +wEl.textContent : null,
+      ele: hijo(p, "AltitudeMeters") ? +hijo(p, "AltitudeMeters").textContent : null,
+      cad: hijo(p, "Cadence") ? +hijo(p, "Cadence").textContent : (porNombre(p, "RunCadence")[0] ? +porNombre(p, "RunCadence")[0].textContent : null)
     };
   });
   const laps = porNombre(doc, "Lap");
@@ -342,12 +400,15 @@ export function leerFIT(buf) {
     if (m[253] != null) lastTs = m[253];
     const ts = m[253] ?? tsComp;
     if (def.global === 20 && ts != null) {
-      puntos.push({ t: (ts + FIT_EPOCH) * 1000, hr: m[3], d: m[5] != null ? m[5] / 100 : null, w: m[7], lat: null, lon: null });
+      const SC = 180 / 2147483648;
+      const alt = m[78] != null ? m[78] / 5 - 500 : m[2] != null ? m[2] / 5 - 500 : null;
+      puntos.push({ t: (ts + FIT_EPOCH) * 1000, hr: m[3], d: m[5] != null ? m[5] / 100 : null, w: m[7], cad: m[4],
+        lat: m[0] != null ? m[0] * SC : null, lon: m[1] != null ? m[1] * SC : null, ele: alt });
     } else if (def.global === 18) {
       resumen = {
         deporte: SPORT[m[5]] || "otro", inicio: m[2] != null ? (m[2] + FIT_EPOCH) * 1000 : null,
         dur: m[8] != null ? m[8] / 1000 : m[7] != null ? m[7] / 1000 : null, dist: m[9] != null ? m[9] / 100 : null,
-        fcMed: m[16], fcMax: m[17], potMed: m[20]
+        fcMed: m[16], fcMax: m[17], potMed: m[20], sube: m[22], kcal: m[11]
       };
     }
   }
@@ -412,6 +473,10 @@ function leerCSV(txt) {
   const cFcMed = col("fc media", "avg hr", "average heart rate", "frecuencia cardiaca media");
   const cFcMax = col("fc maxima", "max hr", "max heart rate", "frecuencia cardiaca maxima");
   const cPot = col("potencia media", "avg power", "average watts");
+  const cSube = col("elevation gain", "ascenso total", "desnivel positivo", "total ascent", "ganancia de elevacion");
+  const cKcal = col("calories", "calorias");
+  const cCad = col("average cadence", "cadencia de carrera media", "cadencia media");
+  const cMov = col("moving time", "tiempo en movimiento");
   if (cFecha < 0 || cDist < 0) {
     const cols = filas[0].map(x => x.trim()).filter(Boolean).slice(0, 12).join(" · ");
     throw new Error(`no es una lista de actividades. Columnas que trae: «${cols}». Para las actividades: Garmin Connect (web) → Actividades → Todas las actividades → «Exportar CSV». Si este archivo te interesa, mándale una captura de sus columnas a quien te mantiene la app.`);
@@ -434,6 +499,11 @@ function leerCSV(txt) {
       potMed: cPot >= 0 ? numero(f[cPot]) : null, mejores: {}
     };
     if (cNombre >= 0 && f[cNombre]) act.titulo = String(f[cNombre]).slice(0, 60);
+    const n_ = c => c >= 0 ? numero(f[c]) : null;
+    if (n_(cSube) != null) act.sube = Math.round(n_(cSube));
+    if (n_(cKcal)) act.kcal = Math.round(n_(cKcal));
+    if (n_(cCad)) act.cad = Math.round(n_(cCad));
+    if (cMov >= 0 && f[cMov]) { const mv = String(f[cMov]).includes(":") ? parseTiempo(String(f[cMov]).split(".")[0]) : numero(f[cMov]); if (mv) act.mov = Math.round(mv); }
     if (dep === "run") marcasPorDistancia(act);
     out.push(act);
   }

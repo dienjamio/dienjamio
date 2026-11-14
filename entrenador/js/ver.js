@@ -1,11 +1,11 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141826";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct } from "./vista.js?v=202611141826";
-import { leerArchivo, fusionar } from "./importar.js?v=202611141826";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141826";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141826";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141826";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141838";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141838";
+import { leerArchivo, fusionar } from "./importar.js?v=202611141838";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141838";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141838";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141838";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -73,7 +73,7 @@ function pintar() {
       const i = diaSemana(h), d = sh.dias[i], regs = regsDe(l0);
       html += `<h2 class="hoy-t">${fechaLarga(h)}</h2>`;
       html += `<article class="dia hoy"><div class="dia-cab"><h3>Entreno</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
-        ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true })).join("") + actividades().filter(a => a.fecha === h).map(a => `<div class="reloj">⌚ <b>Hecho:</b> ${htmlDatosAct(a)}</div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
+        ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true })).join("") + actividades().filter(a => a.fecha === h).map(a => `<div class="reloj"><button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button></div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
       // entrenos de días anteriores sin registrar
       const sin = sh.dias.slice(0, i).flatMap((dd, k) => dd.ses.filter(s => s.dep !== "movilidad" && !regs[s.id]).map(s => ({ s, k })));
       if (sin.length) html += `<div class="pendientes"><b>Sin registrar esta semana:</b> ${sin.map(x => `<button class="link" data-acc="registrar" data-id="${x.s.id}">${DIAS[x.k]} · ${esc(x.s.t)}</button>`).join(" · ")}</div>`;
@@ -160,6 +160,7 @@ async function clic(e) {
     return guardar(`ses-${r.l}-${r.s.id}`, { tipo: "sesion", lunes: r.l, dia: r.i, sesId: r.s.id, titulo: r.s.t, min: r.s.min, hecho: "si", visto: false }, "✅ ¡Hecho! Bien trabajado");
   }
   if (acc === "ejercicio") return mostrarEjercicio(b.dataset.n, P.videos || {});
+  if (acc === "ver-act") return mostrarActividad(actPorClave(b.dataset.k));
   if (acc === "registrar") {
     const r = buscarSesion(b.dataset.id); if (!r) return;
     regSes = r; regAct = undefined;
@@ -224,7 +225,8 @@ function enlazarDialogos() {
     try {
       const a = (await leerArchivo(f))[0];
       if (!a) throw new Error("no trae ninguna actividad");
-      regAct = { fecha: a.fecha, dep: a.dep, km: a.km, dur: a.dur, fcMed: a.fcMed || null, fcMax: a.fcMax || null, potMed: a.potMed || null, mejores: a.mejores || {}, hr20: a.hr20 || null, fuente: "Deportista" };
+      regAct = { fecha: a.fecha, dep: a.dep, km: a.km, dur: a.dur, fcMed: a.fcMed || null, fcMax: a.fcMax || null, potMed: a.potMed || null, mejores: a.mejores || {}, hr20: a.hr20 || null,
+        sube: a.sube ?? null, cad: a.cad || null, kcal: a.kcal || null, det: a.det || null, fuente: "Subida por el deportista" };
       const fm = $("#f-reg");
       if (a.km) fm.elements.km.value = String(a.km).replace(".", ",");
       if (a.dur) fm.elements.tiempo.value = fmtT(a.dur);

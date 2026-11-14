@@ -413,3 +413,21 @@ cite{display:block;color:var(--ink3);font-style:normal;font-size:13px;margin-top
 .ia-res{white-space:pre-wrap;background:var(--paper);border-radius:10px;padding:10px;font-size:14px;max-height:50vh;overflow:auto}
 .st-lista{display:flex;flex-direction:column;gap:6px;margin:8px 0}
 .st-lista .fila{justify-content:space-between;background:var(--paper);border-radius:10px;padding:8px 10px}
+
+/* ---------- v8: detalle de actividad ---------- */
+button.act{width:100%;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer;border-radius:10px;align-items:center}
+button.act:hover{background:var(--paper)}
+.act-tx{flex:1;min-width:0;display:flex;flex-direction:column}
+.act .flecha{color:var(--ink3);font-size:18px}
+.reloj-b{width:100%;border:0;background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer;padding:0}
+.reloj-b .mas{color:var(--swim);font-weight:700;white-space:nowrap}
+dialog.hoja.ancha{width:min(760px,calc(100% - 16px))}
+.act-cab{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.act-cab>div{flex:1;min-width:0}
+.ic-g{font-size:30px}
+.chips-m{display:flex;flex-wrap:wrap;gap:6px}
+.chips-m span{background:var(--paper);border-radius:999px;padding:5px 11px;font-size:13.5px}
+.barra-p{width:30%}
+.barra-p i{display:block;height:8px;border-radius:4px;background:var(--run)}
+svg.graf-act,svg.mapa-act{width:100%;height:auto;background:var(--paper);border-radius:10px;margin-top:6px}
+#dlg-act .kpis{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}

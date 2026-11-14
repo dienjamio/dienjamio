@@ -1,7 +1,7 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141826";
-import { infoEjercicio } from "./biblioteca.js?v=202611141826";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141826";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141838";
+import { infoEjercicio } from "./biblioteca.js?v=202611141838";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141838";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -62,7 +62,7 @@ export function htmlActividades(acts, titulo = "Actividades") {
       const w = porSemana[l].sort((x, y) => y.fecha.localeCompare(x.fecha));
       const km = w.filter(x => x.dep === "run").reduce((t, x) => t + (x.km || 0), 0), h = w.reduce((t, x) => t + (x.dur || 0), 0);
       return `<details class="sem-act" ${l === Object.keys(porSemana).sort().reverse()[0] ? "open" : ""}><summary><b>${rangoSemana(l)}</b><span>${w.length} actividad${w.length > 1 ? "es" : ""} · ${fmtHoras(h)}${km ? ` · ${String(Math.round(km * 10) / 10).replace(".", ",")} km corriendo` : ""}</span></summary>
-        ${w.map(a => `<div class="act"><span class="ic">${ICO[a.dep] || "•"}</span><div><b>${DIAS[(new Date(a.fecha + "T12:00").getDay() + 6) % 7]} ${fechaCorta(a.fecha)}</b>${a.titulo ? ` · ${esc(a.titulo)}` : ""}<div class="small">${htmlDatosAct(a)}</div></div></div>`).join("")}
+        ${w.map(a => `<button class="act" data-acc="ver-act" data-k="${registrarAct(a)}"><span class="ic">${ICO[a.dep] || "•"}</span><span class="act-tx"><b>${DIAS[(new Date(a.fecha + "T12:00").getDay() + 6) % 7]} ${fechaCorta(a.fecha)}</b>${a.titulo ? ` · ${esc(a.titulo)}` : ""}<span class="small">${htmlDatosAct(a)}</span></span><span class="flecha">${a.det ? "📈" : ""}›</span></button>`).join("")}
       </details>`;
     }).join("")}</article>`;
 }
@@ -98,7 +98,7 @@ export function htmlDia(snap, i, ed = false, op = {}) {
   return `<article class="dia${esHoy ? " hoy" : ""}" id="dia-${i}">
     <div class="dia-cab"><h3>${DIAS[i]} <span class="fecha">${fechaCorta(fecha)}</span>${esHoy ? ' <span class="badge-hoy">Hoy</span>' : ""}</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
     ${ses}
-    ${hechas.length ? `<div class="reloj">${hechas.map(a => `<div>⌚ <b>Hecho:</b> ${ICO[a.dep] || ""} ${htmlDatosAct(a)}</div>`).join("")}</div>` : ""}
+    ${hechas.length ? `<div class="reloj">${hechas.map(a => `<button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${ICO[a.dep] || ""} ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button>`).join("")}</div>` : ""}
     ${ed ? `<button class="btn add mini" data-acc="add-ses" data-dia="${i}">＋ Añadir sesión</button>` : ""}
   </article>`;
 }
@@ -256,5 +256,79 @@ export function mostrarEjercicio(nombre, videos = {}) {
     ${i.como ? `<p><b>Cómo se hace:</b> ${esc(i.como)}</p>` : ""}
     ${i.ojo ? `<p class="txt-alerta"><b>Ojo:</b> ${esc(i.ojo)}</p>` : ""}
     <div class="acciones fila"><a class="btn pri mini" href="${esc(i.video)}" target="_blank" rel="noopener">▶ ${i.propio ? "Ver el vídeo de tu entrenador" : "Ver vídeos de la técnica"}</a><span class="sp"></span><button class="btn sec mini" data-cerrar>Cerrar</button></div>`;
+  d.showModal();
+}
+
+/* ---------- Detalle de una actividad ---------- */
+const VISTAS = [];
+/** Guarda la actividad para poder abrir su detalle desde un botón (data-k). */
+export function registrarAct(a) { VISTAS.push(a); return VISTAS.length - 1; }
+export const actPorClave = k => VISTAS[+k];
+const NOM_DEP = { run: "Carrera", bike: "Bici", swim: "Natación", fuerza: "Fuerza", andar: "Caminata", otro: "Actividad" };
+const NOM_MARCA = { "1k": "1 km", "5k": "5 km", "10k": "10 km", media: "Media maratón", maraton: "Maratón" };
+function lineaSvg(serie, idx, alto, color, invertir = false) {
+  const pts = serie.map(p => [p[0], p[idx]]).filter(p => p[1] != null);
+  if (pts.length < 4) return "";
+  const W = 600, dmax = serie[serie.length - 1][0] || 1;
+  let v = pts.map(p => p[1]).sort((a, b) => a - b);
+  const lo = v[Math.floor(v.length * 0.03)], hi = v[Math.ceil(v.length * 0.97) - 1], r = Math.max(1, hi - lo);
+  const y = x => { const k = (Math.min(hi, Math.max(lo, x)) - lo) / r; return (invertir ? k : 1 - k) * (alto - 14) + 7; };
+  const linea = pts.map(p => `${(p[0] / dmax * W).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+  return { svg: `<polyline points="${linea}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`, lo, hi };
+}
+function graficas(det, dep) {
+  const s = det?.serie; if (!s || s.length < 4) return "";
+  const km = (s[s.length - 1][0] / 1000).toFixed(1).replace(".", ",");
+  const bloque = (titulo, g, alto, etiqueta) => g ? `<h4 class="sep">${titulo}</h4><svg viewBox="0 0 600 ${alto}" class="graf-act" role="img" aria-label="${titulo}">${g.svg}<text x="4" y="11" class="ax">${etiqueta(g.hi)}</text><text x="4" y="${alto - 2}" class="ax">${etiqueta(g.lo)}</text><text x="596" y="${alto - 2}" class="ax" text-anchor="end">${km} km</text></svg>` : "";
+  return bloque("Pulso", lineaSvg(s, 1, 110, "var(--alta)"), 110, v => `${v} ppm`)
+    + (dep === "run" ? bloque("Ritmo", lineaSvg(s, 2, 110, "var(--run)", true), 110, v => `${fmtRitmo(v)} /km`) : "")
+    + bloque("Altitud", lineaSvg(s, 3, 90, "var(--accent)"), 90, v => `${Math.round(v)} m`);
+}
+function mapa(ruta) {
+  if (!ruta || ruta.length < 5) return "";
+  const lat = ruta.map(p => p[0]), lon = ruta.map(p => p[1]);
+  const la0 = Math.min(...lat), la1 = Math.max(...lat), lo0 = Math.min(...lon), lo1 = Math.max(...lon);
+  const k = Math.cos((la0 + la1) / 2 * Math.PI / 180), ancho = (lo1 - lo0) * k || 1e-6, alto = la1 - la0 || 1e-6;
+  const W = 600, H = Math.min(360, Math.max(140, W * alto / ancho)), esc_ = Math.min((W - 20) / ancho, (H - 20) / alto);
+  const xy = p => [10 + ((p[1] - lo0) * k) * esc_, H - 10 - (p[0] - la0) * esc_];
+  const linea = ruta.map(p => xy(p).map(v => v.toFixed(1)).join(",")).join(" ");
+  const [ix, iy] = xy(ruta[0]), [fx, fy] = xy(ruta[ruta.length - 1]);
+  return `<h4 class="sep">Recorrido</h4><svg viewBox="0 0 ${W} ${H.toFixed(0)}" class="mapa-act" role="img" aria-label="Recorrido"><polyline points="${linea}" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${ix.toFixed(1)}" cy="${iy.toFixed(1)}" r="6" fill="var(--baja)"/><circle cx="${fx.toFixed(1)}" cy="${fy.toFixed(1)}" r="6" fill="var(--alta)"/></svg><small>🟢 salida · 🔴 llegada</small>`;
+}
+function parciales(det, dep) {
+  const p = det?.parc; if (!p?.length) return "";
+  const ritmos = p.map(x => x[1] / (x[0] / 1000)), mn = Math.min(...ritmos), mx = Math.max(...ritmos);
+  const ud = dep === "bike" ? "5 km" : dep === "swim" ? "100 m" : "km";
+  return `<h4 class="sep">Parciales (cada ${ud})</h4><div class="wrap"><table class="kms parc"><tr><th>${dep === "bike" ? "Tramo" : "Km"}</th><th>${dep === "bike" ? "Velocidad" : "Ritmo"}</th><th></th><th>Pulso</th><th>Desn.</th></tr>
+    ${p.map((x, i) => { const r = ritmos[i], ancho = mx > mn ? 30 + 70 * (mx - r) / (mx - mn) : 100;
+      return `<tr><td>${i + 1}${x[0] < (dep === "bike" ? 4900 : dep === "swim" ? 95 : 980) ? `<small> (${x[0]} m)</small>` : ""}</td><td><b>${dep === "bike" ? `${(x[0] / x[1] * 3.6).toFixed(1).replace(".", ",")} km/h` : dep === "swim" ? `${fmtRitmo(x[1] / (x[0] / 100))} /100` : fmtRitmo(r)}</b></td><td class="barra-p"><i style="width:${ancho.toFixed(0)}%"></i></td><td>${x[2] ?? "—"}</td><td>${x[3] == null ? "—" : (x[3] > 0 ? "+" : "") + x[3] + " m"}</td></tr>`; }).join("")}
+  </table></div>`;
+}
+/** Abre la ficha completa de una actividad. extra: HTML adicional (p. ej. lo planificado ese día). */
+export function mostrarActividad(a, extra = "") {
+  if (!a) return;
+  const kpi = (v, t) => v ? `<div class="kpi"><b>${v}</b><span>${t}</span></div>` : "";
+  const ritmo = a.dep === "run" && a.km && a.dur ? `${fmtRitmo(a.dur / a.km)} /km` : a.dep === "bike" && a.km && a.dur ? `${(a.km / a.dur * 3600).toFixed(1).replace(".", ",")} km/h` : a.dep === "swim" && a.km && a.dur ? `${fmtRitmo(a.dur / (a.km * 10))} /100 m` : "";
+  const mejores = Object.entries(a.mejores || {}).filter(([k]) => NOM_MARCA[k]);
+  let d = document.getElementById("dlg-act");
+  if (!d) { d = document.createElement("dialog"); d.id = "dlg-act"; d.className = "hoja ancha"; document.body.append(d); d.addEventListener("click", e => { if (e.target === d || e.target.closest("[data-cerrar]")) d.close(); }); }
+  d.innerHTML = `<div class="act-cab"><span class="ic-g">${ICO[a.dep] || "•"}</span><div><h3>${esc(a.titulo || NOM_DEP[a.dep] || "Actividad")}</h3><span class="small">${DIAS[(new Date(a.fecha + "T12:00").getDay() + 6) % 7]} ${fechaCorta(a.fecha)} · ${NOM_DEP[a.dep] || ""}${a.fuente ? " · " + esc(a.fuente) : ""}</span></div><button class="icon-btn" data-cerrar aria-label="Cerrar">✕</button></div>
+    <div class="kpis">
+      ${kpi(a.km ? `${String(a.km).replace(".", ",")} km` : "", "distancia")}
+      ${kpi(a.dur ? fmtHoras(a.dur) : "", a.mov ? `tiempo (${fmtHoras(a.mov)} en movimiento)` : "tiempo")}
+      ${kpi(ritmo, a.dep === "bike" ? "velocidad media" : "ritmo medio")}
+      ${kpi(a.fcMed ? `${a.fcMed} ppm` : "", "pulso medio")}
+      ${kpi(a.fcMax ? `${a.fcMax} ppm` : "", "pulso máximo")}
+      ${kpi(a.sube != null && a.sube > 0 ? `+${a.sube} m` : "", "desnivel")}
+      ${kpi(a.cad ? `${a.cad}` : "", a.dep === "bike" ? "cadencia (rpm)" : "cadencia (pasos/min)")}
+      ${kpi(a.potMed ? `${a.potMed} W` : "", "potencia media")}
+      ${kpi(a.kcal ? `${a.kcal}` : "", "kcal")}
+    </div>
+    ${mejores.length ? `<h4 class="sep">Mejores marcas en esta actividad</h4><div class="chips-m">${mejores.map(([k, v]) => `<span>${NOM_MARCA[k]} <b>${fmtHoras(v)}</b></span>`).join("")}</div>` : ""}
+    ${extra}
+    ${parciales(a.det, a.dep)}
+    ${graficas(a.det, a.dep)}
+    ${mapa(a.det?.ruta)}
+    ${a.det ? "" : `<p class="muted small">Para ver parciales por km, gráficas de pulso y ritmo y el recorrido, hace falta el archivo completo de la actividad (.fit, .gpx o .tcx): viene en el ZIP de Strava o Garmin, o se sube al registrar el entreno.</p>`}`;
   d.showModal();
 }
