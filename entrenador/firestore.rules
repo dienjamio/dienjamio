@@ -24,7 +24,7 @@ service cloud.firestore {
       match /aportes/{id} {
         allow read, delete: if exists(/databases/$(database)/documents/publico/$(token));
         allow create, update: if exists(/databases/$(database)/documents/publico/$(token))
-          && request.resource.data.tipo in ["sesion", "semana", "carrera"]
+          && request.resource.data.tipo in ["sesion", "semana", "carrera", "visita"]
           && (!("img" in request.resource.data) || (request.resource.data.img is string && request.resource.data.img.size() < 900000));
       }
     }

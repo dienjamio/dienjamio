@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/icon-192.png">
-<link rel="stylesheet" href="styles.css?v=202611141530">
+<link rel="stylesheet" href="styles.css?v=202611141816">
 </head>
 <body>
 <header class="top no-print">
@@ -46,7 +46,7 @@
         <div class="g3">
           <label>Sexo <select name="sexo"><option value="h">Hombre</option><option value="m">Mujer</option></select></label>
           <label>Edad <input name="edad" type="number" min="12" max="90" required></label>
-          <label>Nivel <select name="nivel"><option value="principiante">Principiante</option><option value="intermedio">Intermedio</option><option value="avanzado">Avanzado</option></select></label>
+          <label>Nivel <select name="nivel"><option value="cero">Desde cero (nunca ha corrido)</option><option value="principiante">Principiante</option><option value="intermedio">Intermedio</option><option value="avanzado">Avanzado</option></select></label>
         </div>
         <div class="g2">
           <label>Peso (kg) <input name="peso" type="number" min="30" max="200" step="0.1" required></label>
@@ -107,6 +107,9 @@
         <small>La FC de umbral (la del ritmo que aguanta ~1 hora) es la más fiable. Si no la sabes, con la máxima y la de reposo vale. También puedes importarlas en «Datos».</small>
         <label class="chip chip-sw"><input type="checkbox" name="zonasPropias" id="zonas-propias"> Usar sus zonas propias (las de su Garmin, Polar…)</label>
         <div class="zonas-propias" id="zp" hidden></div>
+        <label class="chip chip-sw"><input type="checkbox" id="ritmos-propios"> Escribir yo sus ritmos por zona (min/km)</label>
+        <div class="zonas-propias" id="rp" hidden></div>
+        <small>Si no escribes ritmos, salen de sus marcas o actividades; y si no hay ninguna, se estiman según nivel, sexo y edad (avisando de que son estimados).</small>
       </fieldset>
 
       <fieldset>
@@ -250,6 +253,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/app.js?v=202611141530"></script>
+<script type="module" src="js/app.js?v=202611141816"></script>
 </body>
 </html>

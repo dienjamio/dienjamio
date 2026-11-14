@@ -4,7 +4,7 @@
      entrenadores/{uid}/deportistas/{id}/semanas/{lunes}   plan de cada semana
      entrenadores/{uid}/deportistas/{id}/archivos/{fid}    PDF e informes (hasta ~700 KB)
      publico/{token}                                 lo que ve el deportista con su enlace */
-import { firebaseConfig } from "./firebase-config.js?v=202611141530";
+import { firebaseConfig } from "./firebase-config.js?v=202611141816";
 
 const V = "10.12.2";
 const SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}.js`;
@@ -142,6 +142,11 @@ export async function guardarAporte(token, id, datos) {
 export async function marcarAporte(token, id, cambios) {
   await cargarFirebase();
   await fb.setDoc(fb.doc(db, "publico", token, "aportes", id), sinAnidar(cambios), { merge: true });
+}
+/** Cuenta una visita del deportista a su enlace. */
+export async function registrarVisita(token, dia) {
+  await cargarFirebase();
+  await fb.setDoc(fb.doc(db, "publico", token, "aportes", "visitas"), { tipo: "visita", n: fb.increment(1), ultima: new Date().toISOString(), dias: fb.arrayUnion(dia) }, { merge: true });
 }
 export async function borrarAporte(token, id) {
   await cargarFirebase();

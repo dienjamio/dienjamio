@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141530";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141816";
 
 /* =========================================================
    Catálogos
@@ -31,6 +31,7 @@ export const FASES = {
   descarga: { n: "Semana de descarga", vol: 0.65, d: "Cada cuarta semana baja la carga (~35 %) para asimilar el trabajo y evitar sobrecargas." },
   acumulacion: { n: "Hipertrofia · acumulación", vol: 1, d: "Volumen alto de series (8-12 repeticiones) cerca del fallo para construir músculo." },
   intensificacion: { n: "Hipertrofia · intensificación", vol: 1, d: "Menos repeticiones y más carga (6-8) para ganar fuerza y seguir creciendo." },
+  iniciacion: { n: "Iniciación: correr y andar", vol: 0.8, d: "Empezar a correr sin lesionarse: tramos cortos de trote muy suave alternados con caminata, que crecen cada semana hasta correr 30 minutos seguidos." },
   readaptacion: { n: "Readaptación", vol: 0.7, d: "Volver a correr poco a poco alternando carrera y caminata, con fuerza preventiva. Manda el dolor." },
   progresion: { n: "Vuelta progresiva", vol: 0.85, d: "Bloques de carrera cada vez más largos. Si no hay molestias, se avanza; si las hay, se repite la semana." },
   consolidacion: { n: "Consolidación", vol: 1, d: "Carrera continua suave y fuerza. Preparado para volver a un plan normal." }
@@ -54,6 +55,7 @@ export function contexto(a, lunes) {
 function calcFase(a, ctx) {
   const t = TAPER[ctx.obj];
   let f;
+  if (a.cero && ctx.semanaNum <= INICIACION.length && !(ctx.A && ctx.semanas === 1)) return { f: "iniciacion", descarga: false, clave: "iniciacion" };
   if (a.objetivo === "lesion" && !ctx.A) {
     f = ctx.semanaNum <= 2 ? "readaptacion" : ctx.semanaNum <= 6 ? "progresion" : "consolidacion";
     return { f, descarga: false, clave: f };
@@ -76,8 +78,9 @@ function calcFase(a, ctx) {
    Datos efectivos: lo que pone la ficha y, si falta, lo que dicen sus actividades
    ========================================================= */
 export function efectivo(a) {
-  const h = a.hist;
-  if (!h || a._ef) return a;
+  if (a._ef) return a;
+  const cero = a.nivel === "cero";
+  const h = a.hist || {};
   const fc = { ...(a.fc || {}) }, marcas = { ...(a.marcas || {}) }, de = {};
   if (!+fc.max && h.fcMaxObs) { fc.max = h.fcMaxObs; de.fcmax = true; }
   if (!+fc.umbral && h.lthr && !Array.isArray(fc.zonas)) { fc.umbral = h.lthr; de.umbral = true; }
@@ -85,14 +88,14 @@ export function efectivo(a) {
   let ftp = a.ftp;
   if (!+ftp && h.ftpEst) { ftp = h.ftpEst; de.ftp = true; }
   if (!+fc.rep && h.fcRep) { fc.rep = h.fcRep; de.fcrep = true; }
-  return { ...a, fc, marcas, ftp, _ef: true, _de: de };
+  return { ...a, nivel: cero ? "principiante" : a.nivel, cero, fc, marcas, ftp, _ef: true, _de: de };
 }
-/** Minutos de entreno de resistencia que tocan esta semana según su historial (progresión +5 %/semana). */
+/** Minutos de entreno de resistencia que tocan esta semana según su historial (progresión prudente). */
 function volumenHistorial(a, lunes) {
   const h = a.hist;
   if (!h || !h.horasMedia || +a.horas > 0) return null;
   const w = clamp(Math.floor(diasEntre(lunesDe(h.fecha), lunes) / 7), 0, 12);
-  return h.horasMedia * 60 * 1.1 * (1 + 0.05 * w);
+  return h.horasMedia * 60 * 1.1 * (1 + 0.03 * Math.min(w, 5)); // +10 % y luego +3 %/semana, máximo ≈ +25 %
 }
 
 /* =========================================================
@@ -103,7 +106,8 @@ export function calcZonas(a) {
   const fc = a.fc || {};
   const fcmaxEst = !fc.max;
   const fcmax = +fc.max || Math.round(208 - 0.7 * (a.edad || 35));
-  const fcrep = +fc.rep || 0;
+  const fcrepEst = !(+fc.rep);
+  const fcrep = +fc.rep || (a.nivel === "avanzado" ? 52 : a.nivel === "intermedio" ? 58 : 64);
   const umbral = +fc.umbral || 0;
   let zonasFC, metodo;
   const propias = Array.isArray(fc.zonas) && fc.zonas.length === 5 && fc.zonas.every(z => z && +z[0] > 0 && +z[1] > 0);
@@ -113,7 +117,7 @@ export function calcZonas(a) {
     metodo = `FC de umbral ${umbral} ppm${a._de?.umbral ? " (estimada con sus actividades)" : ""} (método Friel)`;
   } else if (fcrep) {
     zonasFC = [[0.5, 0.6], [0.6, 0.7], [0.7, 0.8], [0.8, 0.9], [0.9, 1]].map(([lo, hi]) => [Math.round(fcrep + (fcmax - fcrep) * lo), Math.round(fcrep + (fcmax - fcrep) * hi)]);
-    metodo = `FC máx ${fcmax}${a._de?.fcmax ? " (de sus actividades)" : ""} y reposo ${fcrep} (método Karvonen)`;
+    metodo = `FC máx ${fcmax}${fcmaxEst ? " (estimada por edad)" : a._de?.fcmax ? " (de sus actividades)" : ""} y reposo ${fcrep}${fcrepEst ? " (estimado)" : a._de?.fcrep ? " (de sus datos)" : ""} (método Karvonen).${fcmaxEst || fcrepEst ? " Mejor medirlas o importar sus actividades." : ""}`;
   } else {
     zonasFC = [[0.5, 0.6], [0.6, 0.7], [0.7, 0.8], [0.8, 0.9], [0.9, 1]].map(([lo, hi]) => [Math.round(fcmax * lo), Math.round(fcmax * hi)]);
     metodo = `% de la FC máx ${fcmax}${fcmaxEst ? " (estimada por edad: mejor medirla o importarla)" : a._de?.fcmax ? " (de sus actividades)" : ""}`;
@@ -125,10 +129,20 @@ export function calcZonas(a) {
   if (!t10 && t5) t10 = t5 * Math.pow(2, 1.06);
   if (!t10 && t21) t10 = t21 / Math.pow(2.10975, 1.06);
   if (!t10 && t42) t10 = t42 / Math.pow(4.2195, 1.08);
-  let ritmos = null, carrera = null;
+  let ritmos = null, carrera = null, ritmoEstimado = false;
+  if (!t10 && !t5) {
+    // sin marcas: un 5 km prudente según nivel, sexo y edad (se avisa de que es estimado)
+    const base = { cero: [2280, 2520], principiante: [1860, 2100], intermedio: [1500, 1710], avanzado: [1260, 1410] }[a.cero ? "cero" : a.nivel] || [1860, 2100];
+    const e5 = base[a.sexo === "m" ? 1 : 0] * (1 + 0.006 * Math.max(0, (+a.edad || 35) - 35));
+    t10 = e5 * Math.pow(2, 1.06); ritmoEstimado = true;
+  }
   if (t10) {
     const p = t10 / 10;
-    ritmos = [[1.38, 1.26], [1.26, 1.15], [1.15, 1.06], [1.06, 0.99], [0.99, 0.93]].map(([lento, rapido]) => [p * rapido, p * lento]);
+    // cada zona: lo que dé menos diferencia con el ritmo de 10 km entre un % y unos segundos fijos (así sale realista
+    // tanto para un corredor rápido como para alguien que empieza)
+    const MUL = [[1.38, 1.26], [1.26, 1.15], [1.15, 1.06], [1.06, 0.99], [0.99, 0.93]], ADD = [[110, 70], [80, 40], [42, 18], [18, -3], [-3, -20]];
+    const cerca = (m, add) => { const om = p * (m - 1); return Math.abs(om) < Math.abs(add) ? om : add; };
+    ritmos = MUL.map(([lento, rapido], i) => [p + cerca(rapido, ADD[i][1]), p + cerca(lento, ADD[i][0])]);
     const e5 = t5 || t10 / Math.pow(2, 1.06), e21 = t21 || t10 * Math.pow(2.10975, 1.06), e42 = t42 || t10 * Math.pow(4.2195, 1.08);
     carrera = { "5k": { p: e5 / 5, t: e5 }, "10k": { p: t10 / 10, t: t10 }, media: { p: e21 / 21.0975, t: e21 }, maraton: { p: e42 / 42.195, t: e42 } };
   }
@@ -137,7 +151,14 @@ export function calcZonas(a) {
   let nado = null;
   const css = parseTiempo(a.css);
   if (css) nado = [[css + 20, css + 30], [css + 10, css + 18], [css + 4, css + 9], [css - 2, css + 3], [css - 8, css - 3]];
-  return { fcmax, fcmaxEst, fcrep, umbral, fc: zonasFC, metodo, ritmos, carrera, potencia, nado };
+  // ritmos por zona escritos por el entrenador (mandan sobre todo lo demás)
+  const rz = a.ritmosZona;
+  let ritmosPropios = false;
+  if (Array.isArray(rz) && rz.length === 5 && rz.every(z => z && parseTiempo(z[0]) && parseTiempo(z[1]))) {
+    ritmos = rz.map(z => { const x = parseTiempo(z[0]), y = parseTiempo(z[1]); return [Math.min(x, y), Math.max(x, y)]; });
+    ritmosPropios = true; ritmoEstimado = false;
+  }
+  return { fcmax, fcmaxEst, fcrep, umbral, fc: zonasFC, metodo, ritmos, carrera: ritmoEstimado ? null : carrera, potencia, nado, ritmoEstimado, ritmosPropios };
 }
 
 export const ZNOM = ["Z1 · Recuperación", "Z2 · Aeróbico suave", "Z3 · Tempo", "Z4 · Umbral", "Z5 · VO2máx"];
@@ -145,8 +166,8 @@ export const RPE = ["RPE 2-3 · conversación fácil", "RPE 4-5 · puedes hablar
 
 function zt(Z, dep, z) {
   const i = z - 1, partes = [];
+  if (dep === "run" && Z.ritmos) return `Z${z} a ${fmtRitmo(Z.ritmos[i][0])}-${fmtRitmo(Z.ritmos[i][1])} /km (${Z.fc[i][0]}-${Z.fc[i][1]} ppm)`;
   if (dep !== "swim") partes.push(`${Z.fc[i][0]}-${Z.fc[i][1]} ppm`);
-  if (dep === "run" && Z.ritmos) partes.push(`${fmtRitmo(Z.ritmos[i][0])}-${fmtRitmo(Z.ritmos[i][1])} /km`);
   if (dep === "bike" && Z.potencia) partes.push(i === 0 ? `<${Z.potencia[0][1]} W` : `${Z.potencia[i][0]}-${Z.potencia[i][1]} W`);
   if (dep === "swim") partes.push(Z.nado ? `${fmtRitmo(Z.nado[i][0])}-${fmtRitmo(Z.nado[i][1])} /100 m` : RPE[i]);
   return `Z${z} (${partes.join(" · ")})`;
@@ -165,6 +186,13 @@ function plantilla(a, F, ctx) {
   const general = GENERAL.includes(obj);
   let P = [], prim = "run", k = 0, fuerzaTipo = "general";
   const cardioSel = ["run", "bike", "swim"].filter(x => d[x]);
+  if (F.f === "iniciacion") {
+    // desde cero: 3 sesiones de correr y andar, algo de bici o natación si las hace y fuerza básica
+    P = [S("run", "iniciacion"), S("run", "iniciacion"), S("run", "iniciacion")];
+    for (const x of ["bike", "swim"]) if (d[x]) P.push(S(x, "suave", { tope: 40 }));
+    const dias = [0, 1, 2, 3, 4, 5, 6].filter(x => dispDia(a, x).on).length;
+    return { P, k: d.fuerza ? (dias >= 5 ? 2 : 1) : 0, dobles: 0, prim: "run", general: true, fuerzaTipo: "general" };
+  }
 
   if (obj === "musculo") {
     fuerzaTipo = "musculo";
@@ -285,7 +313,7 @@ function colocar(a, T, F, ctx) {
   const propias = T.P.slice(0, nPropias);
   const extra = T.P.slice(nPropias, nPropias + T.dobles);
 
-  const rango = s => ({ largo: 1, transicion: 2, calidad: 2, readapt: 2, activacion: 3, tecnica: 4, recuperacion: 5, suave: 6 }[s.tipo] ?? 7);
+  const rango = s => ({ largo: 1, transicion: 2, calidad: 2, readapt: 2, iniciacion: 2, activacion: 3, tecnica: 4, recuperacion: 5, suave: 6 }[s.tipo] ?? 7);
   const duros = [...fijos];
   const orden = propias.map((s, i) => ({ s, i })).sort((x, y) => rango(x.s) - rango(y.s) || x.i - y.i);
   const carreraDia = semana.findIndex(x => x.some(y => y.tipo === "competicion" && y.carrera?.prioridad !== "C"));
@@ -299,7 +327,7 @@ function colocar(a, T, F, ctx) {
       const minDist = duros.length ? Math.min(...duros.map(h => distD(h, d))) : 4;
       if (s.tipo === "largo") sc = (d === 6 ? 50 : d === 5 ? 46 : d * 3) + Math.min(mx, 300) / 4 - (minDist === 0 ? 20 : 0) - (cualquierCarrera(d) ? 60 : 0);
       else if (s.tipo === "calidad" || s.tipo === "transicion") sc = minDist * 10 + (d === 1 || d === 3 ? 3 : 0) - (mx < 45 ? 30 : 0) - (carreraDia >= 0 && (carreraDia - d === 1 || carreraDia - d === 2) ? 25 : 0);
-      else if (s.tipo === "readapt") sc = minDist * 10 + (semana[(d + 6) % 7].some(x => x.tipo === "readapt") ? -15 : 0);
+      else if (s.tipo === "readapt" || s.tipo === "iniciacion") sc = minDist * 10 + (semana[(d + 6) % 7].some(x => x.tipo === s.tipo) ? -15 : 0);
       else if (s.tipo === "activacion") sc = carreraDia >= 0 ? (carreraDia - d === 2 ? 30 : carreraDia - d === 1 ? 25 : -distD(carreraDia, d)) : 0;
       else if (s.tipo === "recuperacion") sc = (semana[(d + 6) % 7].some(esDura) ? 20 : 0) + minDist;
       else sc = minDist * 2 - d * 0.1 + mx / 100;
@@ -308,7 +336,7 @@ function colocar(a, T, F, ctx) {
     if (best < 0) break;
     semana[best].push({ ...s });
     libres.delete(best);
-    if (esDura(s) || s.tipo === "readapt") duros.push(best);
+    if (esDura(s) || s.tipo === "readapt" || s.tipo === "iniciacion") duros.push(best);
   }
 
   const ponerExtras = () => { for (const s of extra) {
@@ -380,11 +408,14 @@ function topes(a, s, obj, lunes) {
   if (s.dep === "run") {
     let largo = { "5k": 80, "10k": 95, media: 130, maraton: 180, triatlon: 100, ciclismo: 70 }[obj] || 90;
     if (a.hist?.largoRun && lunes) { const w = clamp(Math.floor(diasEntre(lunesDe(a.hist.fecha), lunes) / 7), 0, 12); largo = Math.min(largo / f, Math.max(40, a.hist.largoRun * 1.1 + 5 * w)); }
-    return { largo: largo * f, calidad: 75, suave: (adv ? 80 : 65) * f, recuperacion: 45, activacion: 30 }[s.tipo] ?? 60;
+    return { largo: largo * f, calidad: ini ? 45 : 75, suave: ini ? 40 : adv ? 80 : 65, recuperacion: ini ? 30 : 45, activacion: 30 }[s.tipo] ?? 60;
   }
   if (s.dep === "bike") return { largo: (obj === "ciclismo" ? 330 : 240) * f, calidad: 120, suave: 120, recuperacion: 60, transicion: 120, activacion: 45 }[s.tipo] ?? 90;
   return { tecnica: 70, calidad: 75, suave: 75, recuperacion: 45, activacion: 30 }[s.tipo] ?? 60;
 }
+/* Plan de iniciación (desde cero): [segundos de trote, segundos andando, repeticiones] por semana */
+export const INICIACION = [[60, 120, 8], [90, 120, 7], [120, 180, 6], [120, 120, 6], [180, 120, 5], [240, 90, 5], [300, 90, 4], [480, 90, 3], [600, 60, 3], [900, 60, 2], [1200, 0, 1], [1500, 0, 1], [1800, 0, 1]];
+const minSeg = x => x % 60 ? `${Math.floor(x / 60) ? Math.floor(x / 60) + "'" : ""}${x % 60}''` : `${x / 60}'`;
 const PASOS_LESION = [[1, 2, 6], [2, 2, 6], [3, 1, 5], [5, 1, 4], [8, 1, 3], [12, 1, 2]];
 
 function duraciones(a, semana, F, ctx, Z) {
@@ -392,11 +423,14 @@ function duraciones(a, semana, F, ctx, Z) {
   const vol = FASES[F.clave].vol;
   const todas = semana.flat();
   const ligera = ["puesta", "carrera"].includes(F.f) || F.descarga;
-  const minFuerza = s => s.ftipo === "musculo" ? (ligera ? 40 : ini ? 45 : adv ? 70 : 60) : ligera ? 30 : ini ? 35 : adv ? 50 : 45;
+  const minFuerza = s => s.ftipo === "musculo" ? (ligera ? 40 : ini ? 45 : adv ? 70 : 60) : a.cero ? 25 : ligera ? 30 : ini ? 35 : adv ? 50 : 45;
   for (const s of todas) {
     if (s.dep === "fuerza") s.min = minFuerza(s);
     else if (s.tipo === "movilidad") s.min = 25;
-    else if (s.tipo === "readapt") {
+    else if (s.tipo === "iniciacion") {
+      const [tr, an, rp] = INICIACION[Math.min(ctx.semanaNum, INICIACION.length) - 1];
+      s.min = r5(10 + rp * (tr + an) / 60);
+    } else if (s.tipo === "readapt") {
       const w = Math.min(ctx.semanaNum, 8);
       s.min = w <= 6 ? 10 + PASOS_LESION[w - 1][2] * (PASOS_LESION[w - 1][0] + PASOS_LESION[w - 1][1]) : w === 7 ? 35 : 45;
     } else if (s.tipo === "competicion") {
@@ -410,7 +444,9 @@ function duraciones(a, semana, F, ctx, Z) {
   const disponible = [0, 1, 2, 3, 4, 5, 6].reduce((t, d) => t + (dispDia(a, d).on ? Math.min(maxDia(a, d), 240) : 0), 0);
   const hist = volumenHistorial(a, ctx.lunes);
   const aj = +(a.ajustes?.[ctx.lunes]) || 1; // ajuste decidido por el entrenador tras la valoración del deportista
-  const horas = +a.horas > 0 ? a.horas * 60 : disponible * 0.8;
+  const porNivel = { principiante: 3.5, intermedio: 5, avanzado: 7 }[a.nivel] || 4;
+  const porObj = { maraton: 1.25, media: 1.1, triatlon: 1.4, ciclismo: 1.3, "5k": 0.9, musculo: 1, lesion: 0.8 }[ctx.obj] || 1;
+  const horas = +a.horas > 0 ? a.horas * 60 : Math.min(disponible * 0.8, porNivel * porObj * 60);
   // la fuerza nueva cuenta a medias dentro de la progresión (+10 %) sobre lo que ya hacía
   const E = hist != null ? Math.max(Math.min(hist - fijos * 0.5, disponible * 0.85) * vol, resis.length * 20) : Math.max(horas * vol - fijos, resis.length * 25);
   const asignar = (lista, total) => {
@@ -453,10 +489,12 @@ function duraciones(a, semana, F, ctx, Z) {
       if (i < 0) break;
       dia.splice(i, 1);
     }
-    const fijo = dia.filter(s => !resis.includes(s)).reduce((t, s) => t + s.min, 0);
     const r = dia.filter(s => resis.includes(s));
     const tr = r.reduce((t, s) => t + s.min, 0);
-    if (fijo > max && fu) fu.min = Math.max(20, max - (r.length ? 20 : 0));
+    if (fu) {
+      const otros = dia.filter(s => s !== fu).reduce((t, s) => t + (resis.includes(s) ? 20 : s.min), 0);
+      if (max - otros < 20) dia.splice(dia.indexOf(fu), 1); else fu.min = Math.min(fu.min, max - otros);
+    }
     const hueco = Math.max(r.length * 15, max - dia.filter(s => !resis.includes(s)).reduce((t, s) => t + s.min, 0));
     if (tr > hueco) for (const s of r) s.min = s.min * hueco / tr;
     perdido += Math.max(0, antes - total());
@@ -482,7 +520,7 @@ function s5(dia, max) {
   for (const s of dia) s.min = Math.max(5, Math.round(s.min / 5) * 5);
   if (!max) return;
   let t = dia.reduce((x, s) => x + s.min, 0);
-  for (const s of dia) { if (t <= max) break; if (s.tipo === "competicion") continue; const q = Math.min(t - max, s.min - 10); if (q > 0) { s.min -= Math.ceil(q / 5) * 5; t = dia.reduce((x, y) => x + y.min, 0); } }
+  for (const s of dia) { if (t <= max) break; if (["competicion", "iniciacion", "readapt"].includes(s.tipo)) continue; const q = Math.min(t - max, s.min - 10); if (q > 0) { s.min -= Math.ceil(q / 5) * 5; t = dia.reduce((x, y) => x + y.min, 0); } }
 }
 
 /* =========================================================
@@ -516,7 +554,16 @@ function describir(s, a, F, Z, ctx) {
   }
 
   if (s.dep === "run") {
-    if (tipo === "readapt") {
+    if (tipo === "iniciacion") {
+      const w = Math.min(ctx.semanaNum, INICIACION.length), [tr, an, rp] = INICIACION[w - 1];
+      const ritmo = Z.ritmos ? `${fmtRitmo(Z.ritmos[1][0])}-${fmtRitmo(Z.ritmos[0][1])} /km` : "";
+      out.t = rp > 1 ? `Correr y andar · ${rp} × (${minSeg(tr)} + ${minSeg(an)})` : `Correr ${minSeg(tr)} seguidos`;
+      out.z = `Trote muy suave${ritmo ? " a " + ritmo : ""} (${Z.fc[0][0]}-${Z.fc[1][1]} ppm)`;
+      out.p = ["5' andando a buen paso para calentar",
+        rp > 1 ? `${rp} × (${minSeg(tr)} trotando muy suave + ${minSeg(an)} andando)` : `${minSeg(tr)} trotando muy suave, sin parar`,
+        "5' andando para terminar + estiramientos suaves de gemelo y cuádriceps"];
+      out.n = `Semana ${w} de ${INICIACION.length} de la iniciación. Trota tan suave que puedas hablar sin ahogarte. Si una semana se te hace dura, repítela antes de pasar a la siguiente.`;
+    } else if (tipo === "readapt") {
       const w = Math.min(ctx.semanaNum, 8);
       out.t = "Vuelta a correr"; out.z = z(2);
       const blq = w <= 6 ? `${PASOS_LESION[w - 1][2]} × (${PASOS_LESION[w - 1][0]}' corriendo en Z2 + ${PASOS_LESION[w - 1][1]}' andando)` : w === 7 ? "25' de carrera continua en Z2" : "35' de carrera continua en Z2";
@@ -539,10 +586,11 @@ function describir(s, a, F, Z, ctx) {
       let main;
       if (s.hiit) { main = `HIIT: ${reps(2, 6, 10)} × (30'' fuerte en ${z(5)} / 90'' suave)`; out.t = "HIIT corto"; }
       else if (general || fk === "base") {
-        if (s.q === 1) { main = `Fartlek: ${reps(2, 5, 12)} × (1' en ${z(4)} / 1' trote en Z1)`; out.t = "Fartlek"; }
+        if (s.q === 1 && ini) { main = `Fartlek suave: ${reps(3, 4, 8)} × (1' alegre en ${z(3)} / 2' trote suave)`; out.t = "Fartlek suave"; }
+        else if (s.q === 1) { main = `Fartlek: ${reps(2, 5, 12)} × (1' en ${z(4)} / 1' trote en Z1)`; out.t = "Fartlek"; }
         else { main = `Cuestas: ${reps(2.5, 5, 10)} × 30-45'' subiendo fuerte (${z(5)}), bajada trotando`; out.t = "Cuestas"; }
       } else if (fk === "construccion") {
-        if (s.q === 1) { const b = M >= 35 ? 10 : 8; main = `Umbral: ${reps(b + 2, 2, 4)} × ${b}' en ${z(4)}, recuperando 2' al trote`; out.t = "Umbral"; }
+        if (s.q === 1) { const b = M >= 35 ? 10 : 8; main = `Umbral: ${reps(b + 2, 2, a.nivel === "avanzado" ? 4 : 3)} × ${b}' en ${z(4)}, recuperando 2' al trote`; out.t = "Umbral"; }
         else { main = `VO2máx: ${reps(5, 4, 7)} × 3' en ${z(5)}, recuperando 2' al trote`; out.t = "Series VO2máx"; }
       } else if (fk === "especifico") {
         if (s.q === 1) {
@@ -562,7 +610,7 @@ function describir(s, a, F, Z, ctx) {
       out.t = "Rodaje suave"; out.z = z(2);
       out.p = [`Rodaje continuo ${fmtMin(s.min)} en ${z(2)}`];
       if (s.rectas) out.p.push("Al final: 4-6 rectas de 20'' rápidas y relajadas (técnica)");
-      if (ini) out.n = "Si no puedes mantener Z2 corriendo, alterna 3' de carrera con 1' andando.";
+      if (ini) out.n = "Ritmo de conversación: si te cuesta hablar, ve más despacio o camina 1' y sigue.";
     } else if (tipo === "recuperacion") {
       out.t = "Rodaje regenerativo"; out.z = z(1);
       out.p = [`Trote muy suave ${fmtMin(s.min)} en ${z(1)}`, "10' de movilidad de cadera y tobillo"];
@@ -636,6 +684,7 @@ function describir(s, a, F, Z, ctx) {
     out.n = "Día opcional: si hay cansancio, mejor descanso total.";
   }
   if (s.doble) out.n = (out.n ? out.n + " " : "") + "Segunda sesión del día: sepárala 4-6 h de la primera si puedes.";
+  if (s.dep === "run" && Z.ritmoEstimado && tipo !== "competicion") out.n = (out.n ? out.n + " " : "") + "Ritmos estimados: guíate sobre todo por las sensaciones y el pulso.";
   return out;
 }
 
@@ -709,7 +758,7 @@ function fuerza(s, a, F, ctx) {
    Nutrición
    ========================================================= */
 const MET = {
-  run: { largo: 9.5, calidad: 11, suave: 9, recuperacion: 7, activacion: 8, competicion: 11.5, readapt: 6 },
+  run: { largo: 9.5, calidad: 11, suave: 9, recuperacion: 7, activacion: 8, competicion: 11.5, readapt: 6, iniciacion: 5.5 },
   bike: { largo: 7.5, calidad: 9.5, suave: 7, recuperacion: 5, transicion: 8.5, activacion: 6.5, competicion: 9 },
   swim: { tecnica: 7, calidad: 9, suave: 7.5, recuperacion: 6, activacion: 6, competicion: 9 },
   fuerza: { fuerza: 5 }, movilidad: { movilidad: 2.5 }, carrera: { competicion: 10 }
@@ -807,6 +856,8 @@ export function menuDia(a, ses, carga, cargaSig, semilla) {
 /* =========================================================
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
+/** Versión del generador: si cambia, las semanas futuras sin cambios a mano se rehacen solas. */
+export const MOTOR_V = 3;
 export function generarSemana(a, lunes) {
   a = efectivo(a);
   const ctx = contexto(a, lunes);
@@ -823,7 +874,7 @@ export function generarSemana(a, lunes) {
   }));
   const fase = FASES[F.clave];
   const snap = {
-    lunes, generado: new Date().toISOString(), semilla: (a.seed || 1) + hashTxt(lunes),
+    lunes, generado: new Date().toISOString(), motor: MOTOR_V, semilla: (a.seed || 1) + hashTxt(lunes),
     fase: { clave: F.clave, n: a.objetivo === "musculo" && fase.n.startsWith("Semana de descarga") ? "Descarga" : fase.n, d: fase.d },
     obj: ctx.obj, semanas: ctx.semanas, semanaNum: ctx.semanaNum,
     A: ctx.A ? { nombre: ctx.A.nombre, fecha: ctx.A.fecha, prueba: ctx.A.prueba } : null,

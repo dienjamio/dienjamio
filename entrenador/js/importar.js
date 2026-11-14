@@ -1,6 +1,6 @@
 /* Lectura de archivos de actividad: FIT, GPX, TCX y CSV (Garmin Connect / Strava).
    Todo se procesa en el navegador; solo se guarda el resumen de cada actividad. */
-import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141530";
+import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141816";
 
 const DISTANCIAS = { "1k": 1000, "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 
@@ -143,8 +143,11 @@ function dePolar(j, nombre) {
   if (puntos.length && puntos.every(p => p.d == null)) puntos.forEach(p => { delete p.d; });
   return deSerie({ deporte: sport, puntos, resumen: { deporte: sport, inicio, dur: durISO(ex.duration || j.duration), dist: ex.distance ?? j.distance ?? null, fcMed: hr.avg ?? hr.average ?? null, fcMax: hr.max ?? hr.maximum ?? null } }, "Polar", nombre);
 }
+/** Ritmo más rápido verosímil para una marca (2:50 /km: por encima, nivel récord del mundo). */
+const RITMO_MIN = 170;
 function marcasPorDistancia(act) {
   if (!act.dur || !act.km) return;
+  if (act.dur / act.km < RITMO_MIN) { act.dep = act.dep === "run" ? "bike" : act.dep; return; }
   for (const [k, D] of Object.entries(DISTANCIAS)) if (Math.abs(act.km * 1000 - D) / D < 0.02) act.mejores[k] = Math.round(act.dur * D / (act.km * 1000));
 }
 
@@ -153,9 +156,12 @@ export function fusionar(viejas, nuevas) {
   const lista = viejas.slice();
   let anadidas = 0;
   for (const x of nuevas) {
-    const y = lista.find(y => y.id === x.id || (y.fecha === x.fecha && y.dep === x.dep &&
-      ((x.dur && y.dur && Math.abs(x.dur - y.dur) <= Math.max(90, 0.04 * y.dur)) || (x.km > 0.5 && y.km > 0.5 && Math.abs(x.km - y.km) <= 0.03 * y.km + 0.05))));
+    const mismoDep = y => y.dep === x.dep || y.dep === "otro" || x.dep === "otro";
+    const y = lista.find(y => y.id === x.id || (y.fecha === x.fecha && mismoDep(y) &&
+      ((x.km > 0.5 && y.km > 0.5 && Math.abs(x.km - y.km) <= 0.03 * y.km + 0.05 && (!x.dur || !y.dur || Math.abs(x.dur - y.dur) <= 0.25 * y.dur))
+        || (x.dur && y.dur && Math.abs(x.dur - y.dur) <= Math.max(90, 0.04 * y.dur) && (!(x.km > 0.5) || !(y.km > 0.5))))));
     if (!y) { lista.push(x); anadidas++; continue; }
+    if (y.dep === "otro" && x.dep !== "otro") y.dep = x.dep;
     for (const [k, v] of Object.entries(x)) if (v != null && (y[k] == null || k === "hr20" || k === "p20")) y[k] = v;
     for (const [k, v] of Object.entries(x.mejores || {})) if (!y.mejores?.[k] || v < y.mejores[k]) (y.mejores = y.mejores || {})[k] = v;
     if (x.fcMax && (!y.fcMax || x.fcMax > y.fcMax)) y.fcMax = x.fcMax;
@@ -166,7 +172,9 @@ export function fusionar(viejas, nuevas) {
 
 /* ---------------- Series → resumen ---------------- */
 function deporteDe(t) {
-  t = String(t || "").toLowerCase();
+  t = String(t || "").toLowerCase().trim();
+  if (t === "9") return "run";       // Strava: 9 = carrera en el GPX
+  if (t === "1") return "bike";      // Strava: 1 = bici
   if (/run|carrera|correr|trail|cinta|treadmill|footing|jog/.test(t)) return "run";
   if (/bik|cicl|ride|bici|cycling|mtb|gravel|spinning|indoor_cycling|virtual/.test(t)) return "bike";
   if (/swim|nata|piscina|pool|open_water/.test(t)) return "swim";
@@ -206,7 +214,10 @@ function deSerie(s, fuente, archivo) {
   let acum = 0;
   for (let i = 0; i < pts.length; i++) {
     if (pts[i].d != null) { acum = pts[i].d; continue; }
-    if (i && pts[i].lat != null && pts[i - 1].lat != null) acum += haversine(pts[i - 1], pts[i]);
+    if (i && pts[i].lat != null && pts[i - 1].lat != null) {
+      const paso = haversine(pts[i - 1], pts[i]), dt = (pts[i].t - pts[i - 1].t) / 1000;
+      if (dt > 0 && paso / dt < 25) acum += paso; // un salto de más de 90 km/h es un fallo del GPS
+    }
     pts[i].d = acum;
   }
   const t0 = pts.length ? pts[0].t : s.resumen.inicio;
@@ -227,7 +238,9 @@ function deSerie(s, fuente, archivo) {
     fcMax: R.fcMax ? Math.max(R.fcMax, fcMax || 0) : fcMax,
     potMed: R.potMed || null, mejores: {}
   };
-  if (dep === "run" && pts.length > 10) for (const [k, D] of Object.entries(DISTANCIAS)) if (dist >= D) { const b = mejorTiempo(t, d, D); if (b) act.mejores[k] = b; }
+  // una «carrera» a menos de 2:50 /km de media no es una carrera (bici mal etiquetada o fallo del GPS)
+  if (act.dep === "run" && act.km >= 2 && act.dur / act.km < RITMO_MIN) act.dep = "bike";
+  if (act.dep === "run" && pts.length > 10) for (const [k, D] of Object.entries(DISTANCIAS)) if (dist >= D) { const b = mejorTiempo(t, d, D); if (b && b / (D / 1000) >= RITMO_MIN) act.mejores[k] = b; }
   const pot = pts.map(p => p.w);
   const hrS = pts.map(p => (p.hr > 40 && p.hr < 230) ? p.hr : null);
   if (hrS.filter(Boolean).length > 100 && dur >= 1200) { const m = mejorPotencia(t, hrS, 1200); if (m) act.hr20 = m; }
@@ -432,10 +445,20 @@ export function resumen(acts, medidas = []) {
   const rep = medidas.filter(m => m.medida === "fcrep" && m.fecha >= sumaDias(h, -60)).map(m => m.v).sort((x, y) => x - y);
   const fcRep = rep.length ? rep[Math.floor(rep.length / 2)] : null;
   const desde = sumaDias(h, -365);
+  // las actividades de deporte desconocido o caminatas no cuentan como entreno
+  const ENT = ["run", "bike", "swim", "fuerza"];
+  acts = acts.filter(a => ENT.includes(a.dep) && !(a.dep === "run" && a.km >= 2 && a.dur / a.km < RITMO_MIN));
   const rec = acts.filter(a => a.fecha >= desde);
+  // ritmo habitual corriendo: las marcas que sean mucho más rápidas que eso se descartan
+  const ritmos = rec.filter(a => a.dep === "run" && a.km >= 3 && a.dur).map(a => a.dur / a.km).sort((x, y) => x - y);
+  const ritmoMed = ritmos.length ? ritmos[Math.floor(ritmos.length / 2)] : 0;
   const fcMaxObs = Math.max(0, ...rec.map(a => a.fcMax || 0).filter(x => x < 225)) || null;
   const mejores = {};
-  for (const a of rec) for (const [k, s] of Object.entries(a.mejores || {})) if (!mejores[k] || s < mejores[k].s) mejores[k] = { s, fecha: a.fecha };
+  for (const a of rec) for (const [k, s] of Object.entries(a.mejores || {})) {
+    const ritmo = s / (DISTANCIAS[k] / 1000);
+    if (ritmo < RITMO_MIN || (ritmoMed && ritmo < ritmoMed * 0.7)) continue; // inverosímil
+    if (!mejores[k] || s < mejores[k].s) mejores[k] = { s, fecha: a.fecha };
+  }
   const p20 = Math.max(0, ...rec.map(a => a.p20 || 0));
   // semanas: últimas 8
   const lunesHoy = lunesDe(h);

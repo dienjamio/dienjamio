@@ -1,12 +1,12 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141530";
-import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141530";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio } from "./vista.js?v=202611141530";
-import { BIBLIO } from "./biblioteca.js?v=202611141530";
-import { leerTrack, prevision } from "./carrera.js?v=202611141530";
-import { calcProgreso } from "./progreso.js?v=202611141530";
-import * as A from "./almacen.js?v=202611141530";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141530";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141816";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141816";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio } from "./vista.js?v=202611141816";
+import { BIBLIO } from "./biblioteca.js?v=202611141816";
+import { leerTrack, prevision } from "./carrera.js?v=202611141816";
+import { calcProgreso } from "./progreso.js?v=202611141816";
+import * as A from "./almacen.js?v=202611141816";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141816";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -27,6 +27,8 @@ async function init() {
     <input type="text" class="max" data-max="${i}" placeholder="sin límite" inputmode="numeric" aria-label="Máximo el ${d.toLowerCase()}">
   </div>`).join("");
   $("#sel-descanso").innerHTML = DIAS.map((d, i) => `<option value="${i}">${d}</option>`).join("");
+  $("#rp").innerHTML = [1, 2, 3, 4, 5].map(z => `<div class="zp-f"><span>Z${z}</span><input data-rlo="${z - 1}" placeholder="rápido 5:10"><input data-rhi="${z - 1}" placeholder="lento 5:40"></div>`).join("");
+  $("#ritmos-propios").addEventListener("change", e => { $("#rp").hidden = !e.target.checked; });
   $("#zp").innerHTML = [1, 2, 3, 4, 5].map(z => `<div class="zp-f"><span>Z${z}</span><input type="number" data-zlo="${z - 1}" placeholder="desde"><input type="number" data-zhi="${z - 1}" placeholder="hasta"></div>`).join("");
   $("#f-car").elements.prueba.innerHTML = Object.entries(PRUEBAS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("#f-ses").elements.dia.innerHTML = DIAS.map((d, i) => `<option value="${i}">${d}</option>`).join("");
@@ -130,13 +132,25 @@ function pintarLista() {
       <span class="ini">${esc(a.nombre.trim().slice(0, 1).toUpperCase())}</span>
       <span class="tx"><b>${esc(a.nombre)}</b><span>${esc(OBJ[a.objetivo] || "")} · ${esc(a.nivel)}</span>
       ${nuevos(a).length ? `<span class="nuevo">🔔 ${resumenNuevos(a)}</span>` : ""}
+      ${A.nube ? (v => v ? `<span class="small">👁️ Entró ${hace(v.ultima)} · ${v.n} visitas</span>` : `<span class="small muted">👁️ Aún no ha abierto su enlace</span>`)(visitas(a)) : ""}
       ${prox ? `<span class="prox">🏁 ${esc(prox.nombre || PRUEBAS[prox.prueba])} · ${fechaCorta(prox.fecha)} (${diasEntre(h, prox.fecha)} días)</span>` : `<span class="prox muted">Sin carreras</span>`}</span>
       <span class="flecha">›</span>
     </button>`;
   }).join("")}</div>`;
 }
 
-const nuevos = a => (a._aportes || []).filter(x => !x.visto && !(x.tipo === "carrera" && x.estado && x.estado !== "pendiente"));
+const nuevos = a => (a._aportes || []).filter(x => x.tipo !== "visita" && !x.visto && !(x.tipo === "carrera" && x.estado && x.estado !== "pendiente"));
+const visitas = a => (a._aportes || []).find(x => x.tipo === "visita");
+function hace(isoTxt) {
+  const min = Math.round((Date.now() - Date.parse(isoTxt)) / 60000);
+  return min < 2 ? "ahora mismo" : min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.round(min / 60)} h` : `hace ${Math.round(min / 1440)} día${min >= 2880 ? "s" : ""}`;
+}
+function htmlVisitas(a) {
+  const v = visitas(a);
+  if (!v) return `<span class="vis nada">👁️ Aún no ha abierto su enlace</span>`;
+  const l = lunesDe(hoy()), estaSemana = (v.dias || []).filter(d => d >= l).length;
+  return `<span class="vis ${Date.now() - Date.parse(v.ultima) > 4 * 86400000 ? "frio" : "ok"}">👁️ ${v.n} visita${v.n === 1 ? "" : "s"} · última ${hace(v.ultima)} · ${estaSemana} día${estaSemana === 1 ? "" : "s"} esta semana</span>`;
+}
 function resumenNuevos(a) {
   const n = nuevos(a), c = t => n.filter(x => x.tipo === t).length;
   return [c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
@@ -175,6 +189,9 @@ function escribirForm(a) {
   ["run", "bike", "swim", "fuerza"].forEach(n => { f.elements[n].checked = !!a.deportes?.[n]; });
   f.elements.sinGluten.checked = !!a.sinGluten; f.elements.sinLactosa.checked = !!a.sinLactosa;
   (a.disp || []).forEach((d, i) => { $(`[data-dia="${i}"]`).checked = !!d.on; $(`[data-max="${i}"]`).value = minTxt(+d.max); });
+  const rp = Array.isArray(a.ritmosZona);
+  $("#ritmos-propios").checked = rp; $("#rp").hidden = !rp;
+  [0, 1, 2, 3, 4].forEach(i => { $(`[data-rlo="${i}"]`).value = rp ? a.ritmosZona[i][0] : ""; $(`[data-rhi="${i}"]`).value = rp ? a.ritmosZona[i][1] : ""; });
   const zp = Array.isArray(a.fc?.zonas);
   $("#zonas-propias").checked = zp; $("#zp").hidden = !zp;
   [0, 1, 2, 3, 4].forEach(i => { $(`[data-zlo="${i}"]`).value = zp ? a.fc.zonas[i][0] : ""; $(`[data-zhi="${i}"]`).value = zp ? a.fc.zonas[i][1] : ""; });
@@ -185,6 +202,7 @@ function mostrarSegunObjetivo() { const o = $("#form").elements.objetivo.value; 
 function leerForm() {
   const f = $("#form"), v = n => f.elements[n].value.trim(), num = n => { const x = parseFloat(v(n).replace(",", ".")); return isNaN(x) ? "" : x; };
   const disp = DIAS.map((_, i) => ({ on: $(`[data-dia="${i}"]`).checked, max: leerMin($(`[data-max="${i}"]`).value) }));
+  const ritmosZona = $("#ritmos-propios").checked ? [0, 1, 2, 3, 4].map(i => [$(`[data-rlo="${i}"]`).value.trim(), $(`[data-rhi="${i}"]`).value.trim()]) : null;
   const zonas = $("#zonas-propias").checked ? [0, 1, 2, 3, 4].map(i => [+$(`[data-zlo="${i}"]`).value, +$(`[data-zhi="${i}"]`).value]) : null;
   return {
     nombre: v("nombre"), telefono: v("telefono"), email: v("email"), sexo: v("sexo"), edad: num("edad"), nivel: v("nivel"), peso: num("peso"), altura: num("altura"),
@@ -192,7 +210,7 @@ function leerForm() {
     deportes: { run: f.elements.run.checked, bike: f.elements.bike.checked, swim: f.elements.swim.checked, fuerza: f.elements.fuerza.checked },
     inicio: v("inicio") ? lunesDe(v("inicio")) : proximoLunes(),
     disp, horas: num("horas"), descanso: +v("descanso"),
-    fc: { max: num("fcmax"), rep: num("fcrep"), umbral: num("fcumbral"), zonas },
+    fc: { max: num("fcmax"), rep: num("fcrep"), umbral: num("fcumbral"), zonas }, ritmosZona,
     marcas: { "5k": v("m5k"), "10k": v("m10k"), media: v("mmedia"), maraton: v("mmaraton") }, ftp: num("ftp"), css: v("css"),
     dieta: v("dieta"), comidas: +v("comidas"), sinGluten: f.elements.sinGluten.checked, sinLactosa: f.elements.sinLactosa.checked,
     notas: v("notas"), mensaje: v("mensaje")
@@ -206,6 +224,7 @@ function validar(d) {
   if (d.disp.some(x => x.on && isNaN(x.max))) return "Hay un tiempo máximo que no entiendo: escríbelo como 1:15 o 75.";
   if (d.disp.some(x => x.on && x.max && x.max < 20)) return "Un día con menos de 20 minutos no da para un entreno: súbelo o desmárcalo.";
   for (const k of Object.keys(d.marcas)) if (d.marcas[k] && !parseTiempo(d.marcas[k])) return "Las marcas van como mm:ss o h:mm:ss (por ejemplo 45:30).";
+  if (d.ritmosZona && d.ritmosZona.some(z => !parseTiempo(z[0]) || !parseTiempo(z[1]))) return "Escribe los 5 ritmos por zona como m:ss (por ejemplo 5:10 y 5:40).";
   if (d.css && !parseTiempo(d.css)) return "El ritmo de natación va como m:ss (por ejemplo 1:45).";
   if (d.fc.zonas && d.fc.zonas.some(z => !(z[0] > 0 && z[1] > z[0]))) return "Revisa sus zonas propias: cada zona necesita un «desde» y un «hasta» mayor.";
   const RUN = ["5k", "10k", "media", "maraton", "lesion"];
@@ -328,6 +347,14 @@ async function abrir(id, mantener = false) {
   if (A.nube) { try { a._aportes = await A.listarAportes(a.token); } catch (e) { a._aportes = a._aportes || []; } }
   actual = a;
   if (!mantener) { sub = "semana"; lunesVista = lunesDe(hoy()); }
+  // datos recalculados con los filtros actuales y semanas futuras al día con el generador nuevo
+  if (a.actividades?.length || a.medidas?.length) recalcHist(a);
+  let rehechas = 0;
+  for (const l of Object.keys(a.semanas || {}).filter(l => l >= lunesDe(hoy()))) {
+    const s = a.semanas[l];
+    if (!s.editada && s.motor !== MOTOR_V) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); rehechas++; }
+  }
+  if (rehechas) { await A.guardarFicha(a); toast(`Plan actualizado con el generador nuevo (${rehechas} semana${rehechas > 1 ? "s" : ""})`); }
   await asegurarSemanas(a);
   const t = $("#tab-atleta"); t.hidden = false; t.textContent = "👤 " + a.nombre.split(" ")[0];
   history.replaceState(null, "", `?a=${a.id}`);
@@ -350,11 +377,12 @@ function pintarAtleta() {
     <div class="enlace">
       <span class="lbl">Su enlace</span>
       <code>${A.nube ? esc(enlace(a)) : "Disponible al conectar Firebase"}</code>
+      ${A.nube ? `<div class="small">${htmlVisitas(a)}</div>` : ""}
       ${A.nube ? `<div class="small" id="estado-enlace">${a._pub ? (a._pub.ok ? "✅ Al día: ve lo último que has guardado" : `⚠️ No se ha podido actualizar (${esc(a._pub.err)})`) : "⏳ Actualizando…"}</div>` : ""}
       <div class="fila">
         <button class="btn pri mini" data-acc="copiar-enlace" ${A.nube ? "" : "disabled"}>🔗 Copiar enlace</button>
         <button class="btn sec mini" data-acc="compartir" ${A.nube ? "" : "disabled"}>${a.telefono ? "💬 Enviar por WhatsApp" : "📤 Enviar"}</button>
-        <a class="btn sec mini" href="${A.nube ? esc(enlace(a)) : "#"}" target="_blank" rel="noopener" ${A.nube ? "" : 'aria-disabled="true"'}>👁️ Ver como él</a>
+        <a class="btn sec mini" href="${A.nube ? esc(enlace(a)) + "&yo=1" : "#"}" target="_blank" rel="noopener" ${A.nube ? "" : 'aria-disabled="true"'}>👁️ Ver como él</a>
         ${a.telefono && A.nube ? `<button class="btn sec mini" data-acc="avisar">📣 Avisar de cambios</button>` : ""}
       </div>
     </div>`;

@@ -1,7 +1,7 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141530";
-import { infoEjercicio } from "./biblioteca.js?v=202611141530";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141530";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141816";
+import { infoEjercicio } from "./biblioteca.js?v=202611141816";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141816";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -33,7 +33,7 @@ export function htmlSesion(s, ed = false, op = {}) {
     ${s.n ? `<div class="nota">${esc(s.n)}</div>` : ""}
     ${htmlRegistro(reg)}
     ${ed ? `<div class="ses-acc"><button class="btn sec mini" data-acc="editar-ses" data-id="${s.id}">✎ Cambiar</button></div>` : ""}
-    ${op.registrar ? `<div class="ses-acc"><button class="btn ${reg ? "sec" : "pri"} mini" data-acc="registrar" data-id="${s.id}">${reg ? "✎ Cambiar mi registro" : "✔ Registrar entreno"}</button></div>` : ""}
+    ${op.registrar ? `<div class="ses-acc">${reg ? `<button class="btn sec mini" data-acc="registrar" data-id="${s.id}">✎ Cambiar mi registro</button>` : `<button class="btn pri mini" data-acc="hecho-rapido" data-id="${s.id}">✅ Hecho</button><button class="btn sec mini" data-acc="registrar" data-id="${s.id}">📝 Con detalles</button>`}</div>` : ""}
   </div>`;
 }
 
