@@ -460,3 +460,69 @@ body.cinta .c-calle,body:not(.cinta) .c-cinta{display:none}
 .dor-t{margin:12px 0 6px;font-size:28px;line-height:1.1;font-weight:900;text-transform:uppercase;letter-spacing:.01em}
 .dor-c{font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
 .dor-pie{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);color:var(--ink2);font-size:13px}
+
+/* v10 · Forma y fatiga */
+.carga-g .dia-cab{flex-wrap:wrap;gap:6px}
+.estado-c{font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--paper)}
+.estado-c.fresco,.estado-c.forma{color:var(--baja)}.estado-c.equilibrio{color:var(--accent)}.estado-c.carga{color:var(--media)}.estado-c.fatiga{color:var(--crit)}
+.kpis-c{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:10px 0}
+.kpis-c .kpi{background:var(--paper);border-radius:10px;padding:8px 10px}
+.kpis-c .kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.kpis-c .kpi span{font-size:12px;color:var(--ink2)}
+.kpis-c .kpi.mal b{color:var(--crit)}.kpis-c .kpi.ojo b{color:var(--media)}.kpis-c .kpi.ok b{color:var(--baja)}
+.graf-carga{width:100%;height:auto;display:block}
+.graf-carga .l-ctl{fill:none;stroke:#3D8BFF;stroke-width:2.5}
+.graf-carga .l-atl{fill:none;stroke:#FF3DF5;stroke-width:1.5;opacity:.85}
+.graf-carga .cero{stroke:var(--line)}
+.graf-carga .tsb-pos{fill:var(--baja);opacity:.7}.graf-carga .tsb-neg{fill:var(--media);opacity:.6}.graf-carga .tsb-mal{fill:var(--crit);opacity:.8}
+.graf-carga .ax{fill:var(--ink3);font-size:11px}
+.ley-c{display:flex;gap:14px;font-size:12.5px;color:var(--ink2)}
+.ley-c span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.ley-c .c-ctl::before{background:#3D8BFF}.ley-c .c-atl::before{background:#FF3DF5}.ley-c .c-tsb::before{background:var(--baja)}
+
+/* v10 · Bienestar */
+.bien-f{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}
+.bien-f b{font-size:14px;min-width:64px}
+.bien-o{display:flex;gap:4px}
+.bien-o button{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--paper);font-size:20px;cursor:pointer;filter:grayscale(.6);opacity:.75}
+.bien-o button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);filter:none;opacity:1;transform:scale(1.06)}
+.bien-dolor{display:flex;gap:8px;align-items:center;margin:10px 0 6px;font-size:14px}
+.bien input#bien-dolor-txt{width:100%;margin-bottom:8px}
+.bien .btn.pri{width:100%;margin-top:6px}
+.bien-ok{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;margin-bottom:10px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:14px}
+.bien-ok.ok{border-color:#1F5F3A}.bien-ok.ojo{border-color:#6B4D00}.bien-ok.mal{border-color:#7A1F2F}
+.dor-aviso{margin-top:10px;padding:8px 10px;border-radius:10px;font-size:13.5px;font-weight:600}
+.dor-aviso.mal{background:#3A0F18;color:#FFC2CD}.dor-aviso.ojo{background:#3A2C00;color:#FFE08A}
+.bien-14{display:flex;gap:4px;align-items:flex-end;height:90px;margin:8px 0}
+.bien-14>div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;position:relative}
+.bien-14 i{display:block;width:100%;max-width:22px;border-radius:4px 4px 2px 2px}
+.bien-14 i.ok{background:var(--baja)}.bien-14 i.ojo{background:var(--media)}.bien-14 i.mal{background:var(--crit)}.bien-14 i.nada{background:var(--line)}
+.bien-14 small{font-size:10.5px}.bien-14 em{position:absolute;top:-2px;font-style:normal;font-size:11px}
+
+/* v10 · Tiempo */
+#tiempo-hoy{margin:-4px 0 14px}
+.tiempo{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font-size:14px}
+.ti-fila{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:3px 0}
+.tiempo p{margin:8px 0 0;font-size:13.5px;line-height:1.4}
+
+/* v10 · Zapatillas */
+.zap{padding:8px 0;border-bottom:1px solid var(--line)}
+.zap.retirada{opacity:.55}
+.zap-t{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px}
+.zap-t span{color:var(--ink2)}
+.zap-b{height:8px;background:var(--paper);border-radius:99px;overflow:hidden;margin:6px 0 2px}
+.zap-b i{display:block;height:100%}
+.zap-b i.ok{background:var(--baja)}.zap-b i.ojo{background:var(--media)}.zap-b i.mal{background:var(--crit)}
+.zap-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.zap-add input{flex:1 1 140px;min-width:0}
+
+/* v10 · Equipo y chips de la lista */
+.equipo{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:0 0 14px}
+.equipo>div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.equipo b{display:block;font-size:22px}.equipo span{font-size:12.5px;color:var(--ink2)}
+.equipo .mal b{color:var(--crit)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.chip-s,.chip-b{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--paper)}
+.chip-s.ok,.chip-b.ok{color:var(--baja)}.chip-s.ojo,.chip-b.ojo{color:var(--media)}.chip-s.mal,.chip-b.mal{color:var(--crit)}
+.bien-dolor input{display:inline-block;width:auto;margin:0}
+.graf-carga{max-width:720px;margin:0 auto}

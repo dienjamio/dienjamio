@@ -1,13 +1,14 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141851";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141851";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141851";
-import { BIBLIO } from "./biblioteca.js?v=202611141851";
-import { leerTrack, prevision } from "./carrera.js?v=202611141851";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141851";
-import { calcProgreso } from "./progreso.js?v=202611141851";
-import * as A from "./almacen.js?v=202611141851";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141851";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141906";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141906";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141906";
+import { BIBLIO } from "./biblioteca.js?v=202611141906";
+import { leerTrack, prevision } from "./carrera.js?v=202611141906";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141906";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611141906";
+import { calcProgreso } from "./progreso.js?v=202611141906";
+import * as A from "./almacen.js?v=202611141906";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141906";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -72,7 +73,10 @@ async function cargarLista() {
   if (!A.nube && !atletas.length) await migrarV1();
   if (A.nube && !atletas.length) await subirLocales();
   atletas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
-  if (A.nube) await Promise.all(atletas.map(async a => { try { a._aportes = await A.listarAportes(a.token); } catch (e) { a._aportes = []; } }));
+  await Promise.all(atletas.map(async a => {
+    if (A.nube) { try { a._aportes = await A.listarAportes(a.token); } catch (e) { a._aportes = []; } }
+    try { a.semanas = await A.cargarSemanas(a); } catch (e) { } // para el cumplimiento y las alertas de la lista
+  }));
   $("#aviso-nube").hidden = A.nube;
   $("#aviso-nube").innerHTML = `⚠️ Todavía no está conectada a internet (Firebase): los deportistas se guardan solo en este navegador y <b>sus enlaces no funcionarán</b> hasta conectarla.`;
   pintarLista();
@@ -127,12 +131,13 @@ function pintarLista() {
     return;
   }
   const h = hoy();
-  el.innerHTML = `<div class="tarjetas">${atletas.map(a => {
+  el.innerHTML = htmlEquipo(atletas) + `<div class="tarjetas">${atletas.map(a => {
     const prox = (a.carreras || []).filter(c => c.fecha >= h).sort((x, y) => x.fecha.localeCompare(y.fecha))[0];
     return `<button class="tarjeta" data-abrir="${a.id}">
       <span class="ini">${esc(a.nombre.trim().slice(0, 1).toUpperCase())}</span>
       <span class="tx"><b>${esc(a.nombre)}</b><span>${esc(OBJ[a.objetivo] || "")} · ${esc(a.nivel)}</span>
       ${nuevos(a).length ? `<span class="nuevo">🔔 ${resumenNuevos(a)}</span>` : ""}
+      ${chipSemana(a)}
       ${htmlAlertas(a)}
       ${A.nube ? (v => v ? `<span class="small">👁️ Entró ${hace(v.ultima)} · ${v.n} visitas</span>` : `<span class="small muted">👁️ Aún no ha abierto su enlace</span>`)(visitas(a)) : ""}
       ${prox ? `<span class="prox">🏁 ${esc(prox.nombre || PRUEBAS[prox.prueba])} · ${fechaCorta(prox.fecha)} (${diasEntre(h, prox.fecha)} días)</span>` : `<span class="prox muted">Sin carreras</span>`}</span>
@@ -141,6 +146,34 @@ function pintarLista() {
   }).join("")}</div>`;
 }
 
+function semanaDe(a) {
+  const l = lunesDe(hoy()), snap = a.semanas?.[l];
+  if (!snap) return null;
+  const regs = (a._aportes || []).filter(x => x.tipo === "sesion" && x.lunes === l && x.hecho !== "no");
+  const acts = (a.actividades || []).filter(x => x.fecha >= l && x.fecha <= hoy());
+  let plan = 0, hechas = 0;
+  snap.dias.forEach((d, i) => { const f = sumaDias(l, i); if (f > hoy()) return; d.ses.filter(s => s.dep !== "movilidad").forEach(s => { plan++; if (regs.some(r => r.sesId === s.id) || acts.some(x => x.fecha === f && x.dep === s.dep)) hechas++; }); });
+  const total = snap.dias.flatMap(d => d.ses).filter(s => s.dep !== "movilidad").length;
+  return { plan, hechas, total };
+}
+function chipSemana(a) {
+  const w = semanaDe(a), b = bienestares(a)[0];
+  const bh = b && b.fecha === hoy() ? (p => `<span class="chip-b ${nivelBien(p)}">☀️ ${p}</span>`)(puntuarBien(b)) : "";
+  if (!w || !w.plan) return bh ? `<span class="chips">${bh}</span>` : "";
+  const pct = w.hechas / w.plan;
+  return `<span class="chips"><span class="chip-s ${pct >= 0.8 ? "ok" : pct >= 0.5 ? "ojo" : "mal"}">✅ ${w.hechas}/${w.plan} esta semana</span>${bh}</span>`;
+}
+function htmlEquipo(atletas) {
+  if (atletas.length < 2) return "";
+  let plan = 0, hechas = 0, graves = 0, bien = 0, nb = 0;
+  for (const a of atletas) { const w = semanaDe(a); if (w) { plan += w.plan; hechas += w.hechas; } if (alertas(a).some(x => x.g)) graves++; const b = bienestares(a)[0]; if (b?.fecha === hoy()) { bien += puntuarBien(b); nb++; } }
+  return `<div class="equipo">
+    <div><b>${atletas.length}</b><span>deportistas</span></div>
+    <div><b>${plan ? Math.round(hechas / plan * 100) + " %" : "—"}</b><span>cumplido esta semana</span></div>
+    <div><b>${nb ? Math.round(bien / nb) : "—"}</b><span>bienestar hoy${nb ? ` (${nb})` : ""}</span></div>
+    <div class="${graves ? "mal" : ""}"><b>${graves}</b><span>con avisos importantes</span></div>
+  </div>`;
+}
 const nuevos = a => (a._aportes || []).filter(x => x.tipo !== "visita" && !x.visto && !(x.tipo === "carrera" && x.estado && x.estado !== "pendiente"));
 const visitas = a => (a._aportes || []).find(x => x.tipo === "visita");
 function hace(isoTxt) {
@@ -154,6 +187,32 @@ function htmlVisitas(a) {
   return `<span class="vis ${Date.now() - Date.parse(v.ultima) > 4 * 86400000 ? "frio" : "ok"}">👁️ ${v.n} visita${v.n === 1 ? "" : "s"} · última ${hace(v.ultima)} · ${estaSemana} día${estaSemana === 1 ? "" : "s"} esta semana</span>`;
 }
 /* Alertas de carga y de seguimiento */
+const cargaDe = a => { const Z = calcZonas(a); return calcCarga({ semanas: a.semanas || {}, aportes: a._aportes || [], actividades: a.actividades || [], Z: { fcmax: Z.fcmax, fcrep: Z.fcrep }, mujer: a.sexo === "m" }); };
+const bienestares = a => (a._aportes || []).filter(x => x.tipo === "bienestar").sort((x, y) => y.fecha.localeCompare(x.fecha));
+const zapatillas = a => (a._aportes || []).find(x => x.id === "material")?.zap || [];
+function kmZapa(a, z) {
+  const fin = z.hasta || "9999";
+  const regs = (a._aportes || []).filter(r => r.tipo === "sesion" && r.hecho !== "no" && r.lunes);
+  let km = (a.actividades || []).filter(x => x.dep === "run" && x.fecha >= z.desde && x.fecha < fin).reduce((t, x) => t + (+x.km || 0), 0);
+  for (const r of regs) { const f = sumaDias(r.lunes, r.dia || 0); if (f < z.desde || f >= fin) continue; if (r.act && !(a.actividades || []).some(x => x.fecha === f && x.dep === r.act.dep)) km += +r.act.km || 0; else if (!r.act) km += parseFloat(String(r.km || 0).replace(",", ".")) || 0; }
+  return Math.round((+z.previos || 0) + km);
+}
+function htmlBienTrainer(a) {
+  const bs = bienestares(a).filter(b => b.fecha >= sumaDias(hoy(), -13));
+  if (!bs.length) return "";
+  const dias = Array.from({ length: 14 }, (_, i) => sumaDias(hoy(), i - 13));
+  const media = Math.round(bs.reduce((t, b) => t + (puntuarBien(b) || 0), 0) / bs.length);
+  return `<article class="dia bien-t"><div class="dia-cab"><h3>☀️ Cómo se levanta</h3><span class="small muted">media ${media}/100 · ${bs.length} de 14 días</span></div>
+    <div class="bien-14">${dias.map(f => { const b = bs.find(x => x.fecha === f), p = puntuarBien(b); return `<div title="${fechaCorta(f)}${b ? ` · ${p}/100${b.dolor ? " · dolor " + (b.dolorTxt || "") : ""}` : " · sin dato"}"><i class="${b ? nivelBien(p) : "nada"}" style="height:${b ? 12 + p * 0.5 : 6}px"></i><small>${"LMXJVSD"[(new Date(f + "T12:00").getDay() + 6) % 7]}</small>${b?.dolor ? "<em>🤕</em>" : ""}</div>`; }).join("")}</div>
+    ${bs[0] ? `<p class="small">Último (${fechaCorta(bs[0].fecha)}): ${BIEN_PREG.map(([k, n, ico]) => `${n} ${ico[(bs[0][k] || 3) - 1]}`).join(" · ")}${bs[0].dolor ? ` · 🤕 ${esc(bs[0].dolorTxt || "dolor")}` : ""}</p>` : ""}
+  </article>`;
+}
+function htmlZapasTrainer(a) {
+  const zs = zapatillas(a).filter(z => !z.hasta);
+  if (!zs.length) return "";
+  return `<article class="dia"><div class="dia-cab"><h3>👟 Sus zapatillas</h3></div>${zs.map(z => { const km = kmZapa(a, z); return `<p>${esc(z.nombre)}: <b>${km} km</b>${km >= 800 ? " · 🔴 toca cambiarlas" : km >= 600 ? " · 🟡 ve avisándole" : ""}</p>`; }).join("")}</article>`;
+}
+
 function alertas(a) {
   const out = [], h = hoy(), l0 = lunesDe(h), sem = a.semanas || {};
   const tot = l => sem[l]?.total || 0;
@@ -174,12 +233,20 @@ function alertas(a) {
   }
   const p = calcProgreso({ semanas: sem, aportes: a._aportes || [], actividades: a.actividades || [], n: 2 })[0];
   if (p && p.sesPlan >= 3 && p.sesHechas / p.sesPlan < 0.6) out.push({ t: `📉 La semana pasada cumplió ${p.sesHechas} de ${p.sesPlan}`, g: false });
+  const C = cargaDe(a);
+  if (C?.acwr > 1.5) out.push({ t: `⚠️ Carga sube muy rápido (ratio ${String(C.acwr).replace(".", ",")})`, g: true });
+  else if (C && C.historial >= 21 && C.tsb < -30) out.push({ t: `🪫 Muy fatigado (frescura ${C.tsb})`, g: true });
+  const b = bienestares(a)[0];
+  if (b && b.fecha >= sumaDias(h, -1)) { const pb = puntuarBien(b); if (b.dolor) out.push({ t: `🤕 Hoy con dolor${b.dolorTxt ? ": " + b.dolorTxt.slice(0, 30) : ""}`, g: true }); else if (pb < 45) out.push({ t: `🔴 Se ha levantado mal (${pb}/100)`, g: true }); }
+  const bajos = bienestares(a).filter(x => x.fecha >= sumaDias(h, -6) && puntuarBien(x) < 50).length;
+  if (bajos >= 3) out.push({ t: `😴 ${bajos} días malos esta semana: revisa la carga`, g: true });
+  for (const z of zapatillas(a).filter(z => !z.hasta)) { const km = kmZapa(a, z); if (km >= 750) out.push({ t: `👟 ${z.nombre}: ${km} km`, g: false }); }
   return out;
 }
 const htmlAlertas = a => { const al = alertas(a); return al.length ? `<div class="alertas">${al.map(x => `<span class="alerta-c${x.g ? " grave" : ""}">${esc(x.t)}</span>`).join("")}</div>` : ""; };
 function resumenNuevos(a) {
   const n = nuevos(a), c = t => n.filter(x => x.tipo === t).length;
-  return [c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
+  return [c("bienestar") && `${c("bienestar")} día${c("bienestar") > 1 ? "s" : ""} de bienestar`, c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
 }
 
 /* =========================================================
@@ -357,7 +424,8 @@ async function publicar(a) {
       videos: ajustes.videos || {},
       actividades: (a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep))
         .map(({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det }) => ({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det })),
-      zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo, tipos: Z.tipos, vdot: Z.vdot, ritmoEstimado: Z.ritmoEstimado, ritmosPropios: Z.ritmosPropios },
+      mujer: a.sexo === "m",
+      zonas: { fcmax: Z.fcmax, fcrep: Z.fcrep, fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo, tipos: Z.tipos, vdot: Z.vdot, ritmoEstimado: Z.ritmoEstimado, ritmosPropios: Z.ritmosPropios },
       semanas
     });
     estadoEnlace(a, true);
@@ -453,7 +521,7 @@ function pintarAtleta() {
       : snap.dias.map((_, i) => htmlMenuDia(snap, i, true)).join("") + `<p class="aviso">Menú orientativo calculado según la carga de cada día. No sustituye a un dietista-nutricionista.</p>`;
   } else if (sub === "carreras") pintarCarreras();
   else if (sub === "plan") pintarPlan();
-  else if (sub === "progreso") el.innerHTML = htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }))
+  else if (sub === "progreso") el.innerHTML = htmlCarga(cargaDe(a)) + htmlBienTrainer(a) + htmlZapasTrainer(a) + htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }))
     + (htmlActividades((a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep)), "Sus actividades (12 semanas)") || `<p class="muted small">Sin actividades: súbelas en «Datos» o pídele que suba el archivo de su reloj al registrar cada entreno.</p>`);
   else if (sub === "datos") pintarDatos();
   else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>${htmlFuentes(a)}`;
@@ -636,6 +704,8 @@ function htmlNovedades(a) {
   if (!n.length) return "";
   const lin = n.sort((x, y) => (y.cuando || "").localeCompare(x.cuando || "")).slice(0, 6).map(x => {
     if (x.tipo === "sesion") return `<li>✅ Registró un entreno (${esc(x.dia != null ? DIAS[x.dia] : "")} ${x.lunes ? fechaCorta(sumaDias(x.lunes, x.dia || 0)) : ""})${x.texto ? `: “${esc(x.texto.slice(0, 80))}”` : ""}</li>`;
+    if (x.tipo === "bienestar") { const pb = puntuarBien(x); return `<li>${nivelBien(pb) === "ok" ? "✅" : nivelBien(pb) === "ojo" ? "🟡" : "🔴"} Se levantó el ${fechaCorta(x.fecha)}: <b>${pb}/100</b>${x.dolor ? ` · 🤕 ${esc(x.dolorTxt || "dolor")}` : ""}</li>`; }
+    if (x.tipo === "material") return `<li>👟 Ha actualizado sus zapatillas → míralas en «Progreso»</li>`;
     if (x.tipo === "semana") return `<li>📝 Valoró la semana del ${fechaCorta(x.lunes)}: <b>${SENS_TXT[x.sensacion] || "—"}</b>${x.molestias ? " · ⚠️ molestias" : ""}</li>`;
     return `<li>🏁 Propone la carrera <b>${esc(x.nombre)}</b> (${fechaCorta(x.fecha)}) → mírala en «Carreras»</li>`;
   }).join("");

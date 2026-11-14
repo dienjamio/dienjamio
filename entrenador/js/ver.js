@@ -1,11 +1,13 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141851";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141851";
-import { leerArchivo, fusionar } from "./importar.js?v=202611141851";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141851";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141851";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141851";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141906";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141906";
+import { leerArchivo, fusionar } from "./importar.js?v=202611141906";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141906";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141906";
+import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611141906";
+import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611141906";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141906";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -31,6 +33,7 @@ async function init() {
   $("#barra").hidden = false;
   $("#barra").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) { v = b.dataset.v; pintar(); } });
   $("#main").addEventListener("click", clic);
+  $("#main").addEventListener("change", e => { if (e.target.id === "bien-dolor") $("#bien-dolor-txt").hidden = !e.target.checked; });
   enlazarDialogos();
   pintar();
 }
@@ -71,7 +74,9 @@ function pintar() {
     if (!sh) html += `<div class="panel vacio"><p>Tu entrenador todavía no ha preparado esta semana.</p></div>`;
     else {
       const i = diaSemana(h), d = sh.dias[i], regs = regsDe(l0);
+      html += htmlBien(h);
       html += htmlDorsal(d, h, prox);
+      if (d.ses.some(x => ["run", "bike"].includes(x.dep))) html += `<div id="tiempo-hoy">${geoGuardada() ? `<p class="small muted">Cargando el tiempo…</p>` : `<button class="btn sec mini" data-acc="ver-tiempo">📍 Ver el tiempo y la mejor hora para entrenar</button>`}</div>`;
       html += `<article class="dia hoy"><div class="dia-cab"><h3>Entreno</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
         ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true })).join("") + actividades().filter(a => a.fecha === h).map(a => `<div class="reloj"><button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button></div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
       // entrenos de días anteriores sin registrar
@@ -83,6 +88,7 @@ function pintar() {
       if (i < 6) html += `<div class="manana"><b>Mañana:</b> ${man.ses.length ? man.ses.map(s => esc(s.t)).join(" + ") : "descanso"}</div>`;
     }
     m.innerHTML = html;
+    if (geoGuardada() && $("#tiempo-hoy")) cargarTiempo();
   } else if (v === "semana") {
     const regs = regsDe(lunes), editable = lunes <= lunesDe(hoy());
     const acts = actividades();
@@ -102,7 +108,7 @@ function pintar() {
     const propio = calcProgreso({ semanas: P.semanas, aportes }), L = logros();
     m.innerHTML = `<article class="dia medallas"><div class="dia-cab"><h3>🏅 Mis medallas</h3><span class="muted small">${L.M.filter(x => x[0]).length} de ${L.M.length}</span></div>
       <div class="med">${L.M.map(([ok, i, t]) => `<div class="${ok ? "ok" : ""}"><span>${ok ? i : "🔒"}</span><small>${t}</small></div>`).join("")}</div>
-      <p class="small">🔥 Racha: <b>${L.racha}</b> semana${L.racha === 1 ? "" : "s"} seguidas entrenando · ✅ ${L.n} entrenos registrados${L.km ? ` · 🛣️ ${Math.round(L.km)} km` : ""}</p></article>` + htmlProgreso(mezclarProgreso(P.progreso || [], propio)) + (htmlActividades(actividades().filter(a => a.fecha >= sumaDias(hoy(), -84)), "Mis actividades") || `<p class="muted small">Cuando registres entrenos subiendo el archivo de tu reloj (o tu entrenador suba tu historial), aquí verás todas tus actividades con sus datos.</p>`);
+      <p class="small">🔥 Racha: <b>${L.racha}</b> semana${L.racha === 1 ? "" : "s"} seguidas entrenando · ✅ ${L.n} entrenos registrados${L.km ? ` · 🛣️ ${Math.round(L.km)} km` : ""}${L.kmAno ? ` · 🗓️ ${L.kmAno} km este año` : ""}</p></article>` + htmlCarga(miCarga(), "Mi forma") + htmlZapatillas() + htmlProgreso(mezclarProgreso(P.progreso || [], propio)) + (htmlActividades(actividades().filter(a => a.fecha >= sumaDias(hoy(), -84)), "Mis actividades") || `<p class="muted small">Cuando registres entrenos subiendo el archivo de tu reloj (o tu entrenador suba tu historial), aquí verás todas tus actividades con sus datos.</p>`);
   }
 }
 /* Calendario: un evento de día completo por sesión (.ics, lo abren Google Calendar, iPhone, Outlook…) */
@@ -167,10 +173,74 @@ function htmlDorsal(d, h, prox) {
     <div class="dor-cab"><span class="dor-cat">${cat}</span><span>${fechaLarga(h).replace(/ de \d{4}$/, "")}</span></div>
     <div class="dor-t">${s ? esc(s.tipo === "competicion" ? s.t.replace(/^🏁\s*/, "") : s.t) : "Hoy toca descansar"}</div>
     ${s?.c ? `<div class="dor-c"><span class="c-calle">${esc(s.c.calle)}</span><span class="c-cinta">${esc(s.c.cinta)}</span></div>` : s?.z ? `<div class="dor-c">${esc(s.z)}</div>` : ""}
+    ${consejoBien(h, s)}
     <div class="dor-pie">${total ? `<span>⏱️ ${total >= 60 ? Math.floor(total / 60) + " h " + (total % 60 ? total % 60 + "'" : "") : total + "'"}</span>` : "<span>Recuperar también es entrenar</span>"}${ses.length > 1 ? `<span>+ ${ses.slice(1).map(x => esc(x.t)).join(" + ")}</span>` : ""}${prox && dias > 0 ? `<span>🏁 ${dias} día${dias === 1 ? "" : "s"} para ${esc(prox.nombre || PRUEBAS[prox.prueba])}</span>` : ""}</div>
   </div>`;
 }
 const fmtT = s => { s = Math.round(s); const h = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${mm}:${String(ss).padStart(2, "0")}`; };
+
+/* ---------------- Bienestar diario ---------------- */
+let bienTmp = null;
+const bienDe = f => aportes.find(x => x.tipo === "bienestar" && x.fecha === f);
+function htmlBien(h) {
+  const b = bienDe(h);
+  if (b && !bienTmp) {
+    const p = puntuarBien(b), n = nivelBien(p);
+    return `<div class="bien-ok ${n}"><span>${n === "ok" ? "✅" : n === "ojo" ? "🟡" : "🔴"} Hoy te has levantado: <b>${p}/100</b>${b.dolor ? ` · dolor${b.dolorTxt ? ": " + esc(b.dolorTxt) : ""}` : ""}</span><button class="link" data-acc="bien-editar">Cambiar</button></div>`;
+  }
+  const t = bienTmp || {};
+  return `<article class="dia bien"><div class="dia-cab"><h3>☀️ ¿Cómo te has levantado?</h3><span class="small muted">10 segundos</span></div>
+    ${BIEN_PREG.map(([k, n, ico]) => `<div class="bien-f"><b>${n}</b><div class="bien-o">${ico.map((e, i) => `<button type="button" data-acc="bien" data-k="${k}" data-v="${i + 1}" aria-label="${n} ${i + 1} de 5" ${+t[k] === i + 1 ? 'aria-pressed="true"' : ""}>${e}</button>`).join("")}</div></div>`).join("")}
+    <label class="bien-dolor"><input type="checkbox" id="bien-dolor" ${t.dolor ? "checked" : ""}> Tengo algún dolor</label>
+    <input id="bien-dolor-txt" placeholder="¿Dónde? (rodilla, gemelo…)" value="${esc(t.dolorTxt || "")}" ${t.dolor ? "" : "hidden"}>
+    <button class="btn pri" data-acc="bien-guardar">Guardar</button></article>`;
+}
+function consejoBien(h, s) {
+  const p = puntuarBien(bienDe(h));
+  if (p == null || !s || s.dep === "movilidad") return "";
+  if (bienDe(h).dolor) return `<div class="dor-aviso mal">🤕 Con dolor: si te cambia la forma de correr o va a más, hoy descansa o haz bici suave y avisa a tu entrenador.</div>`;
+  if (p < 45) return `<div class="dor-aviso mal">🔴 Hoy vienes justo: ${["calidad", "test", "largo"].includes(s.tipo) ? "cambia la sesión por un rodaje suave y recorta un 30 %" : "hazlo muy suave y recorta un 30 %"}. Mejor un entreno menos que una lesión.</div>`;
+  if (p < 70) return `<div class="dor-aviso ojo">🟡 Escucha al cuerpo: si en el calentamiento no te encuentras mejor, hazlo todo suave.</div>`;
+  return "";
+}
+
+/* ---------------- Tiempo ---------------- */
+async function cargarTiempo() {
+  const el = $("#tiempo-hoy"); if (!el) return;
+  try {
+    const g = geoGuardada() || await pedirUbicacion();
+    const d = await tiempoHoy(g);
+    const ref = P.zonas?.tipos?.rodaje ? (P.zonas.tipos.rodaje[0] + P.zonas.tipos.rodaje[1]) / 2 : 360;
+    if ($("#tiempo-hoy")) $("#tiempo-hoy").innerHTML = htmlTiempo(resumenTiempo(d, ref));
+  } catch (e) { if ($("#tiempo-hoy")) $("#tiempo-hoy").innerHTML = `<p class="small muted">⚠️ ${esc(e.message)}</p>`; }
+}
+
+/* ---------------- Forma (carga) ---------------- */
+function miCarga() {
+  return calcCarga({ semanas: P.semanas, aportes, actividades: P.actividades || [], Z: { fcmax: P.zonas?.fcmax, fcrep: P.zonas?.fcrep }, mujer: P.mujer });
+}
+
+/* ---------------- Zapatillas ---------------- */
+const material = () => aportes.find(x => x.id === "material")?.zap || [];
+function kmZap(z) {
+  const fin = z.hasta || "9999";
+  let km = actividades().filter(a => a.dep === "run" && a.fecha >= z.desde && a.fecha < fin).reduce((t, a) => t + (+a.km || 0), 0);
+  km += aportes.filter(r => r.tipo === "sesion" && !r.act && r.hecho !== "no" && r.lunes).filter(r => { const f = sumaDias(r.lunes, r.dia || 0); return f >= z.desde && f < fin; })
+    .reduce((t, r) => t + (parseFloat(String(r.km || 0).replace(",", ".")) || 0), 0);
+  return Math.round((+z.previos || 0) + km);
+}
+function htmlZapatillas() {
+  const zs = material();
+  const fila = z => {
+    const km = kmZap(z), pct = Math.min(100, km / 800 * 100), n = km >= 800 ? "mal" : km >= 600 ? "ojo" : "ok";
+    return `<div class="zap ${z.hasta ? "retirada" : ""}"><div class="zap-t"><b>👟 ${esc(z.nombre)}</b><span>${km} km${z.hasta ? " · retiradas" : n === "mal" ? " · toca cambiarlas" : n === "ojo" ? " · ve pensando en cambiarlas" : ""}</span></div>
+      <div class="zap-b"><i class="${n}" style="width:${pct}%"></i></div>
+      ${z.hasta ? "" : `<button class="link" data-acc="zap-retirar" data-id="${z.id}">Retirar</button>`}</div>`;
+  };
+  return `<article class="dia zapas"><div class="dia-cab"><h3>👟 Mis zapatillas</h3><span class="small muted">Duran ~600-800 km</span></div>
+    ${zs.length ? zs.slice().sort((a, b) => !!a.hasta - !!b.hasta).map(fila).join("") : `<p class="small muted">Apúntalas y se suman solas los km que corras con ellas.</p>`}
+    <div class="zap-add"><input id="zap-n" placeholder="Modelo (p. ej. Pegasus 41)"><input id="zap-k" inputmode="numeric" placeholder="km que ya tienen"><button class="btn sec mini" data-acc="zap-add">＋ Añadir</button></div></article>`;
+}
 
 /* ---------------- Acciones ---------------- */
 let regSes = null, fotos = [], regAct = undefined; // fotos: [{ id?, thumb, full? }]
@@ -207,6 +277,29 @@ async function clic(e) {
     $("#reg-act").innerHTML = prev.act ? `✅ ${htmlDatosAct(prev.act)}` : "";
     $("#dlg-reg").returnValue = ""; $("#dlg-reg").showModal();
     return;
+  }
+  if (acc === "bien") {
+    bienTmp = { ...(bienTmp || bienDe(hoy()) || {}), [b.dataset.k]: +b.dataset.v, dolor: $("#bien-dolor")?.checked || false, dolorTxt: $("#bien-dolor-txt")?.value || "" };
+    return pintar();
+  }
+  if (acc === "bien-editar") { bienTmp = { ...bienDe(hoy()) }; return pintar(); }
+  if (acc === "bien-guardar") {
+    const t = { ...(bienTmp || {}), dolor: $("#bien-dolor").checked, dolorTxt: $("#bien-dolor").checked ? $("#bien-dolor-txt").value.trim() : "" };
+    if (BIEN_PREG.some(([k]) => !t[k])) return toast("Marca las cuatro: sueño, energía, piernas y ánimo.");
+    const h = hoy(), d = { tipo: "bienestar", fecha: h, sueno: t.sueno, energia: t.energia, piernas: t.piernas, animo: t.animo, dolor: t.dolor, dolorTxt: t.dolorTxt, puntos: puntuarBien(t), visto: false };
+    bienTmp = null;
+    return guardar(`bien-${h}`, d, puntuarBien(t) >= 70 ? "💪 ¡A por el día!" : "Anotado: tu entrenador lo verá");
+  }
+  if (acc === "ver-tiempo") { $("#tiempo-hoy").innerHTML = `<p class="small muted">Buscando tu ubicación…</p>`; return cargarTiempo(); }
+  if (acc === "zap-add") {
+    const nombre = $("#zap-n").value.trim(); if (!nombre) return toast("Escribe el modelo de las zapatillas.");
+    const zap = [...material(), { id: uid(6), nombre, previos: parseInt($("#zap-k").value, 10) || 0, desde: hoy(), hasta: "" }];
+    return guardar("material", { tipo: "material", zap }, "👟 Zapatillas añadidas");
+  }
+  if (acc === "zap-retirar") {
+    if (!confirm("¿Retirar estas zapatillas? Dejarán de sumar kilómetros.")) return;
+    const zap = material().map(z => z.id === b.dataset.id ? { ...z, hasta: hoy() } : z);
+    return guardar("material", { tipo: "material", zap }, "Zapatillas retiradas");
   }
   if (acc === "valorar") {
     const l = b.dataset.l, prev = aportes.find(x => x.id === `sem-${l}`) || {};
