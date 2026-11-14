@@ -1,5 +1,5 @@
 /* Previsión de carrera: track GPX → perfil kilómetro a kilómetro → ritmo y tiempo previstos. */
-import { fmtRitmo, fmtHoras, parseTiempo } from "./util.js?v=202611142006";
+import { fmtRitmo, fmtHoras, parseTiempo } from "./util.js?v=202611142019";
 
 const R = 6371000, RAD = Math.PI / 180;
 function dist(a, b) {
@@ -106,15 +106,9 @@ function desde(tiempos, km) {
  * Usa la forma actual (predicción de los entrenos) y las marcas de su ficha; nunca el objetivo.
  */
 export function ritmoReal(c, Z, pred, km) {
-  const deMarcas = Z?.carrera?.["10k"] && !Z.ritmoEstimado ? desde(Object.fromEntries(Object.keys(DIST).map(k => [k, Z.carrera[k].t])), km) : null;
-  const dePred = pred?.tiempos ? desde(pred.tiempos, km) : null;
-  if (dePred && (pred.fiab === "alta" || !deMarcas)) return { p: dePred / km, de: `su forma actual (VDOT ${String(pred.vdot).replace(".", ",")}, con ${pred.fuente})` };
-  if (dePred && deMarcas) {
-    const w = pred.fiab === "media" ? 0.6 : 0.3, t = dePred * w + deMarcas * (1 - w);
-    return { p: t / km, de: `su forma actual (${fmtHoras(dePred)}, ${Math.round(w * 100)} %) y sus marcas (${fmtHoras(deMarcas)}, ${Math.round((1 - w) * 100)} %)` };
-  }
-  if (deMarcas) return { p: deMarcas / km, de: "sus marcas de la ficha" };
-  return null;
+  const tiempos = pred?.tiempos || (Z?.carrera && !Z.ritmoEstimado ? Object.fromEntries(Object.keys(DIST).map(k => [k, Z.carrera[k].t])) : null);
+  if (!tiempos) return null;
+  return { p: desde(tiempos, km) / km, de: pred?.fuente || "sus marcas de la ficha" };
 }
 
 /** Previsión realista + plan de parciales para el objetivo. pred: predicción por la forma actual (opcional). */

@@ -3,8 +3,8 @@
    1) Carreras y tests registrados (tiempo + distancia reales).
    2) Ritmo frente a pulso en rodajes continuos: a qué % de la reserva cardiaca va cada ritmo → VO2máx (VDOT).
    3) Mejores tramos de 5 km o más dentro de los entrenos (cota mínima: casi nunca son a tope). */
-import { vdotDe, tiempoVdot } from "./motor.js?v=202611142006";
-import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611142006";
+import { vdotDe, tiempoVdot, tiempoMarcas } from "./motor.js?v=202611142019";
+import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611142019";
 
 const D = { "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 const NOM = { "5k": "5 km", "10k": "10 km", media: "Media maratón", maraton: "Maratón" };
@@ -61,39 +61,43 @@ function vdotVentana({ actividades = [], aportes = [], semanas = {}, Z = {} }, f
 }
 
 /**
- * Devuelve { vdot, tiempos: {5k: s, ...}, fuente, fiab, tend (VDOT de diferencia con hace 4 semanas), kmSem }
+ * Predicción de carrera: SOLO con sus marcas reales (5K, 10K, media, maratón; los resultados de carrera y los tests
+ * las actualizan solas). Los entrenos no cambian los tiempos: solo dan una «señal» de si está mejorando.
+ * Devuelve { vdot, tiempos: {5k: s, ...}, fuente, fiab, senal }
  */
 export function predecir(datos) {
+  const Z = datos.Z || {};
+  if (!Z.marcasV?.length) return null;
   const h = hoy();
-  const ahora = vdotVentana(datos, h);
-  if (!ahora) return null;
-  const antes = vdotVentana(datos, sumaDias(h, -28));
-  const kmSem = (datos.actividades || []).filter(a => a.dep === "run" && a.fecha > sumaDias(h, -28)).reduce((t, a) => t + (a.km || 0), 0) / 4;
   const tiempos = {};
-  for (const [k, m] of Object.entries(D)) {
-    let t = tiempoVdot(ahora.v, m);
-    // fondo: con poco volumen las distancias largas salen más lentas de lo que dice el VDOT
-    if (k === "media") t *= kmSem < 20 ? 1.04 : kmSem < 30 ? 1.02 : 1;
-    if (k === "maraton") t *= kmSem < 30 ? 1.1 : kmSem < 45 ? 1.06 : kmSem < 60 ? 1.03 : 1.01;
-    tiempos[k] = t;
+  for (const [k, km] of Object.entries(D)) tiempos[k] = tiempoMarcas(Z.marcasV, km);
+  const nom = { "5k": "5K", "10k": "10K", media: "media", maraton: "maratón" };
+  const fuente = "sus marcas de " + Z.marcasV.map(x => `${nom[x.k]} (${fmtHoras(x.t)})`).join(" y ");
+  // señal de los entrenos (informativa): tramos de 5 km o más y eficiencia ritmo/pulso
+  const ahora = vdotVentana(datos, h);
+  let senal = null;
+  if (ahora && Z.vdot) {
+    const dif = (ahora.v / Z.vdot - 1) * 100;
+    if (ahora.fiab === "alta" && Math.abs(dif) >= 1.5) senal = `${dif > 0 ? "📈" : "📉"} Su última carrera/test (${ahora.fuente.replace(/^su /, "")}) indica ${dif > 0 ? "mejor" : "peor"} forma que sus marcas (${dif > 0 ? "+" : ""}${Math.round(dif)} %).`;
+    else if (/eficiencia/.test(ahora.fuente) && Math.abs(dif) >= 1) senal = `${dif > 0 ? "📈" : "📉"} Sus entrenos apuntan a que ${dif > 0 ? "está mejorando" : "va algo más cansado"} (${dif > 0 ? "+" : ""}${Math.round(dif)} %): un test de 5 km lo confirmaría.`;
   }
-  return { vdot: Math.round(ahora.v * 10) / 10, tiempos, fuente: ahora.fuente, fiab: ahora.fiab, tend: antes ? Math.round((ahora.v - antes.v) * 10) / 10 : null, kmSem: Math.round(kmSem) };
+  return { vdot: Z.vdot, tiempos, fuente, fiab: Z.marcasV.length >= 2 ? "alta" : "media", senal };
 }
 
 /** Tarjeta de predicción. Z: zonas actuales (para comparar con los ritmos que está usando). prox: próxima carrera. */
 export function htmlPrediccion(pr, Z = null, prox = null, ed = false) {
   if (!pr) return "";
-  const t10 = pr.tiempos["10k"], ref = Z?.carrera?.["10k"]?.t;
-  const dif = ref ? Math.round((ref - t10) / 10) : 0; // s/km
   const k = prox && D[prox.prueba] ? prox.prueba : null;
-  const obj = k && prox.objetivo ? segs(prox.objetivo) : 0;
-  return `<article class="dia pred"><div class="dia-cab"><h3>🔮 Predicción con su forma de ahora</h3><span class="fiab ${pr.fiab}">fiabilidad ${pr.fiab}</span></div>
-    ${k ? `<div class="pred-prox"><span>🏁 ${esc(prox.nombre || NOM[k])} · ${diasEntre(hoy(), prox.fecha)} días</span><b>${fmtHoras(pr.tiempos[k])}</b><span>${fmtRitmo(pr.tiempos[k] / (D[k] / 1000))} /km${obj ? ` · objetivo ${esc(prox.objetivo)} ${pr.tiempos[k] <= obj * 1.005 ? "✅ a su alcance" : `(le faltan ${fmtHoras(pr.tiempos[k] - obj)})`}` : ""}</span></div>` : ""}
-    <div class="wrap"><table><tr><th>Prueba</th><th>Tiempo</th><th>Ritmo</th></tr>
+  const pv = prox?.prev && !prox.prev.falta && prox.prev.real ? prox.prev : null; // la previsión de su recorrido (la misma de «Carreras»)
+  const obj = prox ? (pv?.obj || segs(prox.objetivo)) : 0;
+  const tProx = pv ? pv.total : k ? pr.tiempos[k] : null;
+  const kmProx = pv ? pv.km : k ? D[k] / 1000 : null;
+  return `<article class="dia pred"><div class="dia-cab"><h3>🔮 Tiempos previstos</h3><span class="fiab ${pr.fiab}">${pr.fiab === "alta" ? "con 2+ marcas" : "con 1 marca"}</span></div>
+    ${tProx ? `<div class="pred-prox"><span>🏁 ${esc(prox.nombre || NOM[k])} · ${diasEntre(hoy(), prox.fecha)} días${pv?.sube ? ` · su recorrido (+${pv.sube} m)` : ""}</span><b>${fmtHoras(tProx)}</b><span>${fmtRitmo(tProx / kmProx)} /km${obj ? ` · objetivo ${fmtHoras(obj)} ${tProx <= obj ? "✅ a su alcance" : `· le faltan ${fmtHoras(tProx - obj)}`}` : ""}</span></div>` : ""}
+    <div class="wrap"><table><tr><th>Prueba (llano)</th><th>Tiempo</th><th>Ritmo</th></tr>
       ${Object.keys(D).map(x => `<tr${x === k ? ' class="sel"' : ""}><td>${NOM[x]}</td><td><b>${fmtHoras(pr.tiempos[x])}</b></td><td>${fmtRitmo(pr.tiempos[x] / (D[x] / 1000))} /km</td></tr>`).join("")}
     </table></div>
-    <p class="small">VDOT ${String(pr.vdot).replace(".", ",")}${pr.tend != null && Math.abs(pr.tend) >= 0.3 ? ` · ${pr.tend > 0 ? "▲ mejorando" : "▼ bajando"} (${pr.tend > 0 ? "+" : ""}${String(pr.tend).replace(".", ",")} en 4 semanas)` : pr.tend != null ? " · estable en 4 semanas" : ""} · calculado con ${esc(pr.fuente)}${pr.kmSem ? ` · ${pr.kmSem} km/semana` : ""}.
-    ${pr.kmSem < 45 ? " El maratón y la media se ajustan por el volumen que lleva." : ""}</p>
-    ${ed && ref && Math.abs(dif) >= 3 ? `<div class="pred-acc"><span>${dif > 0 ? `Va <b>${dif} s/km más rápido</b> que los ritmos que usa su plan.` : `Va <b>${-dif} s/km más lento</b> que los ritmos que usa su plan.`}</span><button class="btn sec mini" data-acc="usar-pred">Actualizar sus ritmos</button></div>` : ""}
+    <p class="small">Calculado con ${esc(pr.fuente)}: cada marca predice las demás distancias y manda la más parecida. Cuando pone un resultado de carrera o hace el test de 5 km, se actualiza solo.</p>
+    ${pr.senal ? `<p class="small senal">${esc(pr.senal)}</p>` : ""}
   </article>`;
 }

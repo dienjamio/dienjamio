@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611142006";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611142019";
 
 /* =========================================================
    Catálogos
@@ -113,6 +113,21 @@ export function tiempoVdot(vdot, metros) {
   for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (vdotDe(metros, mid) > vdot) lo = mid; else hi = mid; }
   return (lo + hi) / 2;
 }
+/**
+ * Tiempo previsto para una distancia a partir de TODAS sus marcas: cada marca predice el tiempo (VDOT)
+ * y se hace la media dando más peso a la marca de distancia más parecida (la propia distancia manda).
+ */
+export function tiempoMarcas(marcasV, metros) {
+  let st = 0, sw = 0;
+  for (const x of marcasV) {
+    const igual = Math.abs(x.metros - metros) < 1;
+    const w = igual ? 3 : 1 / (1 + 2.5 * Math.abs(Math.log(metros / x.metros)));
+    let t = igual ? x.t : tiempoVdot(x.v, metros);
+    if (metros > 30000 && x.metros < 30000) t *= 1.03; // un maratón sale algo más lento de lo que dicen las distancias cortas
+    st += t * w; sw += w;
+  }
+  return st / sw;
+}
 export const NOMBRE_RITMO = { recuperacion: "Recuperación", rodaje: "Rodaje", tirada: "Tirada larga", maraton: "Ritmo maratón", media: "Ritmo media", umbral: "Umbral", "10k": "Ritmo 10K", "5k": "Ritmo 5K", series: "Series (VO2máx)" };
 export const ZONA_RITMO = { recuperacion: 1, rodaje: 2, tirada: 2, maraton: 3, media: 3, umbral: 4, "10k": 4, "5k": 5, series: 5 };
 
@@ -154,14 +169,17 @@ export function calcZonas(a) {
     const e5 = base[a.sexo === "m" ? 1 : 0] * (1 + 0.006 * Math.max(0, (+a.edad || 35) - 35));
     t10 = e5 * Math.pow(2, 1.06); ritmoEstimado = true;
   }
-  let tipos = null, vdot = null;
+  let tipos = null, vdot = null, marcasV = null;
   if (t10) {
-    // VDOT (Jack Daniels) a partir de su mejor marca real; si no hay, del 5 km estimado
-    const base = t10 && parseTiempo(m["10k"]) ? [10000, t10] : t5 ? [5000, t5] : t21 ? [21097.5, t21] : t42 ? [42195, t42] : [10000, t10];
-    vdot = vdotDe(base[0], base[1]);
+    // Todas sus marcas reales cuentan (5K, 10K, media, maratón). Sin marcas: el 5 km estimado.
+    marcasV = [["5k", 5000, t5], ["10k", 10000, parseTiempo(m["10k"])], ["media", 21097.5, t21], ["maraton", 42195, t42]]
+      .filter(x => x[2] && x[2] / (x[1] / 1000) > 150).map(([k, metros, t]) => ({ k, metros, t, v: vdotDe(metros, t) }));
+    if (!marcasV.length) marcasV = [{ k: "10k", metros: 10000, t: t10, v: vdotDe(10000, t10) }];
+    // VDOT para los ritmos de entreno: media de sus marcas (el maratón pesa la mitad: depende mucho del fondo)
+    const pw = x => x.k === "maraton" ? 0.5 : 1;
+    vdot = marcasV.reduce((s, x) => s + x.v * pw(x), 0) / marcasV.reduce((s, x) => s + pw(x), 0);
     const r = pct => ritmoVdot(vdot, pct);
-    const pred = d => tiempoVdot(vdot, d);
-    const e5 = t5 || pred(5000), e10 = parseTiempo(m["10k"]) || pred(10000), e21 = t21 || pred(21097.5), e42 = t42 || pred(42195) * 1.03; // el maratón real suele salir algo más lento
+    const e5 = tiempoMarcas(marcasV, 5000), e10 = tiempoMarcas(marcasV, 10000), e21 = tiempoMarcas(marcasV, 21097.5), e42 = tiempoMarcas(marcasV, 42195);
     carrera = { "5k": { p: e5 / 5, t: e5 }, "10k": { p: e10 / 10, t: e10 }, media: { p: e21 / 21.0975, t: e21 }, maraton: { p: e42 / 42.195, t: e42 } };
     // ritmos con nombre (s/km, [rápido, lento])
     const rango = (p, a, b) => [Math.round(p - a), Math.round(p + b)];
@@ -193,7 +211,7 @@ export function calcZonas(a) {
     const R = ritmos;
     tipos = { recuperacion: R[0], rodaje: R[1], tirada: R[1], maraton: R[2], media: R[2], umbral: R[3], "10k": R[3], "5k": R[4], series: R[4] };
   }
-  return { fcmax, fcmaxEst, fcrep, umbral, fc: zonasFC, metodo, ritmos, carrera: ritmoEstimado ? null : carrera, potencia, nado, ritmoEstimado, ritmosPropios, tipos, vdot: vdot ? Math.round(vdot * 10) / 10 : null };
+  return { fcmax, fcmaxEst, fcrep, umbral, fc: zonasFC, metodo, ritmos, carrera: ritmoEstimado ? null : carrera, potencia, nado, ritmoEstimado, ritmosPropios, tipos, vdot: vdot ? Math.round(vdot * 10) / 10 : null, marcasV: ritmoEstimado ? null : marcasV };
 }
 
 export const ZNOM = ["Z1 · Recuperación", "Z2 · Aeróbico suave", "Z3 · Tempo", "Z4 · Umbral", "Z5 · VO2máx"];
@@ -997,7 +1015,7 @@ export function menuDia(a, ses, carga, cargaSig, semilla) {
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
 /** Versión del generador: si cambia, las semanas futuras sin cambios a mano se rehacen solas. */
-export const MOTOR_V = 6;
+export const MOTOR_V = 7;
 export function generarSemana(a, lunes) {
   a = efectivo(a);
   const ctx = contexto(a, lunes);
@@ -1025,6 +1043,23 @@ export function generarSemana(a, lunes) {
   };
   recalcular(a, snap);
   return snap;
+}
+
+/**
+ * Pone al día los ritmos de una semana que no se puede rehacer (tiene registros del deportista):
+ * copia de una semana recién generada los textos con ritmos de las sesiones iguales (mismo día, deporte, tipo y duración).
+ */
+export function refrescarRitmos(a, snap) {
+  const nueva = generarSemana(a, snap.lunes);
+  let n = 0;
+  snap.dias.forEach((d, i) => d.ses.forEach(s => {
+    if (s.editada || s.tipo === "manual") return;
+    const x = nueva.dias[i]?.ses.find(y => y.dep === s.dep && y.tipo === s.tipo && y.min === s.min);
+    if (!x) return;
+    Object.assign(s, { z: x.z, p: x.p, n: x.n, c: x.c, est: x.est, tr: x.tr, obj: x.obj }); n++;
+  }));
+  snap.ritmosV = MOTOR_V;
+  return n;
 }
 
 /** Recalcula carga, menú y totales (tras generar o tras editar a mano). */

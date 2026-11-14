@@ -1,6 +1,6 @@
 /* Informe mensual de un deportista, listo para imprimir o guardar en PDF desde el móvil o el ordenador. */
-import { esc, fmtHoras, fmtRitmo, sumaDias, lunesDe, fechaCorta, hoy } from "./util.js?v=202611142006";
-import { puntuarBien } from "./carga.js?v=202611142006";
+import { esc, fmtHoras, fmtRitmo, sumaDias, lunesDe, fechaCorta, hoy } from "./util.js?v=202611142019";
+import { puntuarBien } from "./carga.js?v=202611142019";
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 export const nombreMes = m => `${MESES[+m.slice(5, 7) - 1]} de ${m.slice(0, 4)}`;
@@ -78,7 +78,7 @@ export function htmlInforme({ a, mes, carga, pred, entrenador = "", comentario =
       ${Object.entries(mejores).map(([k, m]) => `<li>Mejor ${DIST[k][0]}: <b>${fmtHoras(m.s)}</b> (${fmtRitmo(m.s / DIST[k][1])} /km) · ${fechaCorta(m.f)}</li>`).join("")}
       ${carrerasMes.map(c => { const ses = (a.semanas?.[lunesDe(c.fecha)]?.dias || []).flatMap(d => d.ses).find(s => s.carrera?.id === c.id); const r = ses && ap.find(x => x.tipo === "sesion" && x.sesId === ses.id); return `<li>🏁 ${esc(c.nombre)} · ${fechaCorta(c.fecha)}${c.objetivo ? ` · objetivo ${esc(c.objetivo)}` : ""}${r?.tiempo ? ` · <b>${esc(r.tiempo)}</b>` : ""}</li>`; }).join("")}
     </ul></section>` : ""}
-    ${pred ? `<section><h2>Predicción con su forma actual</h2><p>${Object.entries(DIST).map(([k, [n]]) => `${n}: <b>${fmtHoras(pred.tiempos[k])}</b>`).join(" · ")}</p><p class="inf-nota">VDOT ${String(pred.vdot).replace(".", ",")}${pred.tend ? ` (${pred.tend > 0 ? "+" : ""}${String(pred.tend).replace(".", ",")} en 4 semanas)` : ""}, calculado con ${esc(pred.fuente)}.</p></section>` : ""}
+    ${pred ? `<section><h2>Tiempos previstos</h2><p>${Object.entries(DIST).map(([k, [n]]) => `${n}: <b>${fmtHoras(pred.tiempos[k])}</b>`).join(" · ")}</p><p class="inf-nota">VDOT ${String(pred.vdot).replace(".", ",")}, calculado con ${esc(pred.fuente)}.${pred.senal ? " " + esc(pred.senal) : ""}</p></section>` : ""}
     ${vals.length || dolores.length ? `<section><h2>Sensaciones</h2>${vals.length ? `<p>Semanas: ${vals.sort((x, y) => x.lunes.localeCompare(y.lunes)).map(v => `${fechaCorta(v.lunes)} <b>${SENS[v.sensacion] || "—"}</b>`).join(" · ")}</p>` : ""}${dolores.length ? `<p>Molestias anotadas: ${[...new Set(dolores)].map(esc).join(", ")}</p>` : ""}</section>` : ""}
     ${comentario ? `<section class="inf-com"><h2>Valoración del entrenador</h2><p>${esc(comentario).replace(/\n/g, "<br>")}</p></section>` : ""}
     ${prox ? `<section><h2>Próximo objetivo</h2><p>🏁 <b>${esc(prox.nombre)}</b> · ${fechaCorta(prox.fecha)}${prox.objetivo ? ` · objetivo ${esc(prox.objetivo)}` : ""}${pred && DIST[prox.prueba] ? ` · previsión hoy ${fmtHoras(pred.tiempos[prox.prueba])}` : ""}</p></section>` : ""}

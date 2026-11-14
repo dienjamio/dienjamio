@@ -1,18 +1,18 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142006";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142006";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142006";
-import { BIBLIO } from "./biblioteca.js?v=202611142006";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142006";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142006";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142006";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142006";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142006";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142006";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142006";
-import { calcProgreso } from "./progreso.js?v=202611142006";
-import * as A from "./almacen.js?v=202611142006";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142006";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142019";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142019";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142019";
+import { BIBLIO } from "./biblioteca.js?v=202611142019";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142019";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142019";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142019";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142019";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142019";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142019";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142019";
+import { calcProgreso } from "./progreso.js?v=202611142019";
+import * as A from "./almacen.js?v=202611142019";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142019";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -84,6 +84,18 @@ async function cargarLista() {
   $("#aviso-nube").hidden = A.nube;
   $("#aviso-nube").innerHTML = `⚠️ Todavía no está conectada a internet (Firebase): los deportistas se guardan solo en este navegador y <b>sus enlaces no funcionarán</b> hasta conectarla.`;
   pintarLista();
+  // si ha cambiado la forma de calcular (ritmos, previsiones…), sus enlaces se ponen al día solos
+  if (A.nube) for (const x of atletas.filter(x => x.token && x.pubV !== PUB_V)) {
+    x.pubV = PUB_V;
+    (async () => {
+      for (const l of Object.keys(x.semanas || {}).filter(l => l >= lunesDe(hoy()))) {
+        const sn = x.semanas[l];
+        if (!sn.editada && !conRegistros(x, l) && sn.motor !== MOTOR_V) { x.semanas[l] = generarSemana(x, l); await A.guardarSemana(x, x.semanas[l]); }
+        else if (sn.motor !== MOTOR_V && sn.ritmosV !== MOTOR_V) { refrescarRitmos(x, sn); await A.guardarSemana(x, sn); }
+      }
+      await publicar(x); await A.guardarFicha(x);
+    })().catch(() => {});
+  }
   const id = new URLSearchParams(location.search).get("a");
   if (id && atletas.some(x => x.id === id)) abrir(id);
 }
@@ -191,7 +203,7 @@ function htmlVisitas(a) {
   return `<span class="vis ${Date.now() - Date.parse(v.ultima) > 4 * 86400000 ? "frio" : "ok"}">👁️ ${v.n} visita${v.n === 1 ? "" : "s"} · última ${hace(v.ultima)} · ${estaSemana} día${estaSemana === 1 ? "" : "s"} esta semana</span>`;
 }
 /* Alertas de carga y de seguimiento */
-const predDe = a => { const Z = calcZonas(a); return predecir({ actividades: a.actividades || [], aportes: a._aportes || [], semanas: a.semanas || {}, Z: { fcmax: Z.fcmax, fcrep: Z.fcrep, vdot: Z.vdot, ritmoEstimado: Z.ritmoEstimado } }); };
+const predDe = a => { const Z = calcZonas(a); return predecir({ actividades: a.actividades || [], aportes: a._aportes || [], semanas: a.semanas || {}, Z }); };
 const cargaDe = a => { const Z = calcZonas(a); return calcCarga({ semanas: a.semanas || {}, aportes: a._aportes || [], actividades: a.actividades || [], Z: { fcmax: Z.fcmax, fcrep: Z.fcrep }, mujer: a.sexo === "m" }); };
 const bienestares = a => (a._aportes || []).filter(x => x.tipo === "bienestar").sort((x, y) => y.fecha.localeCompare(x.fecha));
 const zapatillas = a => (a._aportes || []).find(x => x.id === "material")?.zap || [];
@@ -412,6 +424,8 @@ async function actualizarFuturas(a) {
    Publicación (enlace del deportista)
    ========================================================= */
 const enlace = a => new URL(`ver.html?d=${a.token}`, location.href).href;
+/** Versión de lo publicado: súbela cuando cambien cálculos que ve el deportista. */
+const PUB_V = 3;
 const AV_DEF = { registros: true, bienestar: true, mensajes: true, resultados: true, valoraciones: true };
 const prefAvisos = () => ({ ...AV_DEF, ...(ajustes.avisos || {}) });
 async function canalEntrenador() {
@@ -482,6 +496,7 @@ async function abrir(id, mantener = false) {
   for (const l of Object.keys(a.semanas || {}).filter(l => l >= lunesDe(hoy()))) {
     const s = a.semanas[l];
     if (!s.editada && !conRegistros(a, l) && s.motor !== MOTOR_V) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); rehechas++; }
+    else if (s.motor !== MOTOR_V && s.ritmosV !== MOTOR_V) { refrescarRitmos(a, s); await A.guardarSemana(a, s); }
   }
   if (rehechas) { await A.guardarFicha(a); toast(`Plan actualizado con el generador nuevo (${rehechas} semana${rehechas > 1 ? "s" : ""})`); }
   await asegurarSemanas(a);
@@ -621,8 +636,7 @@ function htmlResumen(a) {
       ${zs.map(z => { const km = kmZapa(a, z); return k(km + " km", "👟 " + esc(z.nombre), km >= 800 ? "mal" : km >= 600 ? "ojo" : ""); }).join("")}
     </div>
     <h4 class="r-sec">Rendimiento</h4><div class="r-kpis">
-      ${pr ? k(fmtHoras(pr.tiempos["10k"]), `10K con su forma actual · VDOT ${String(pr.vdot).replace(".", ",")}${pr.tend ? ` (${pr.tend > 0 ? "+" : ""}${String(pr.tend).replace(".", ",")})` : ""}`, pr.tend > 0.3 ? "ok" : pr.tend < -0.3 ? "mal" : "") : ""}
-      ${Z.carrera ? k(fmtHoras(Z.carrera["10k"].t), "10K de sus ritmos de entreno") : ""}
+      ${pr ? k(fmtHoras(pr.tiempos["5k"]), "5K previsto (llano)") + k(fmtHoras(pr.tiempos["10k"]), `10K previsto · VDOT ${String(pr.vdot).replace(".", ",")}`) : ""}
       ${prox ? k(`${diasEntre(h, prox.fecha)} d`, `hasta ${esc(prox.nombre)}`) : ""}
       ${pv && !pv.falta && pv.real ? k(fmtHoras(pv.total), `previsión ${esc(prox.nombre)}${pv.obj ? ` · objetivo ${fmtHoras(pv.obj)}` : ""}`, pv.obj ? (pv.total <= pv.obj ? "ok" : (pv.total - pv.obj) / pv.km <= 4 ? "ojo" : "mal") : "") : ""}
     </div>
