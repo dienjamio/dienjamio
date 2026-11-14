@@ -213,6 +213,8 @@ h4.sep{margin:16px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:
 .periodo{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--ink2)}
 .periodo .chip{padding:6px 11px;font-size:13px}
 .usa{margin:4px 0 8px;padding-left:18px}
+.fuentes td{vertical-align:top}
+.fuentes td.flojo{color:var(--media)}
 .usa li{margin:6px 0}
 .errores{color:var(--crit);font-size:13.5px}
 .sugs{list-style:none;padding:0;margin:4px 0 10px}

@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611140943";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141259";
 
 /* =========================================================
    Catálogos
@@ -84,6 +84,7 @@ export function efectivo(a) {
   for (const k of ["5k", "10k", "media", "maraton"]) if (!marcas[k] && h.mejores?.[k]) { marcas[k] = fmtHoras(h.mejores[k].s); de["m" + k] = true; }
   let ftp = a.ftp;
   if (!+ftp && h.ftpEst) { ftp = h.ftpEst; de.ftp = true; }
+  if (!+fc.rep && h.fcRep) { fc.rep = h.fcRep; de.fcrep = true; }
   return { ...a, fc, marcas, ftp, _ef: true, _de: de };
 }
 /** Minutos de entreno de resistencia que tocan esta semana según su historial (progresión +5 %/semana). */
@@ -782,7 +783,7 @@ const SLOTS = {
   4: [["desayuno", "Desayuno", 0.25], ["comida", "Comida", 0.35], ["merienda", "Merienda", 0.15], ["cena", "Cena", 0.25]],
   3: [["desayuno", "Desayuno", 0.30], ["comida", "Comida", 0.40], ["cena", "Cena", 0.30]]
 };
-const bmr = a => 10 * a.peso + 6.25 * a.altura - 5 * a.edad + (a.sexo === "m" ? -161 : 5);
+export const bmr = a => 10 * a.peso + 6.25 * a.altura - 5 * a.edad + (a.sexo === "m" ? -161 : 5);
 const hashTxt = t => [...String(t)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7);
 
 export function menuDia(a, ses, carga, cargaSig, semilla) {

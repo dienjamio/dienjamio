@@ -1,9 +1,9 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611140943";
-import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611140943";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha } from "./vista.js?v=202611140943";
-import * as A from "./almacen.js?v=202611140943";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611140943";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141259";
+import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141259";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha } from "./vista.js?v=202611141259";
+import * as A from "./almacen.js?v=202611141259";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141259";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -362,7 +362,39 @@ function pintarAtleta() {
       : snap.dias.map((_, i) => htmlMenuDia(snap, i, true)).join("") + `<p class="aviso">Menú orientativo calculado según la carga de cada día. No sustituye a un dietista-nutricionista.</p>`;
   } else if (sub === "carreras") pintarCarreras();
   else if (sub === "datos") pintarDatos();
-  else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>`;
+  else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>${htmlFuentes(a)}`;
+}
+
+/* ---------------- De dónde sale cada dato ---------------- */
+function htmlFuentes(a) {
+  const ef = efectivo(a), H = a.hist, de = ef._de || {}, Z = calcZonas(a);
+  const fila = (q, v, f, mal = false) => `<tr><td>${q}</td><td><b>${v}</b></td><td class="${mal ? "flojo" : ""}">${f}</td></tr>`;
+  const filas = [];
+  const zp = Array.isArray(a.fc?.zonas);
+  filas.push(fila("FC máxima", `${Z.fcmax} ppm`, +a.fc?.max ? "Escrita en la ficha" : de.fcmax ? "La más alta de sus actividades" : "Estimada por la edad (208 − 0,7 × edad). Poco fiable: escríbela o sube actividades", !(+a.fc?.max) && !de.fcmax));
+  filas.push(fila("FC en reposo", +ef.fc?.rep ? `${ef.fc.rep} ppm` : "—", +a.fc?.rep ? "Escrita en la ficha" : de.fcrep ? "Mediana de sus datos de los últimos 60 días" : "Sin dato (opcional)"));
+  filas.push(fila("FC de umbral", +ef.fc?.umbral ? `${ef.fc.umbral} ppm` : "—", +a.fc?.umbral ? "Escrita en la ficha" : de.umbral ? "Estimada con su mejor esfuerzo de 20' corriendo" : "Sin dato (opcional, la más fiable para las zonas)"));
+  filas.push(fila("Zonas de pulso", zp ? "Propias" : Z.umbral ? "Por umbral" : Z.fcrep ? "Por reserva cardiaca" : "Por % de FC máx", Z.metodo));
+  const m = ["10k", "5k", "media", "maraton"].find(k => ef.marcas?.[k]);
+  const nm = { "5k": "5 km", "10k": "10 km", media: "media maratón", maraton: "maratón" };
+  filas.push(fila("Ritmos de los entrenos", m ? `${nm[m]} en ${ef.marcas[m]}` : "Sin ritmos", m ? (de["m" + m] ? "Su mejor marca en las actividades subidas" : "Marca escrita en la ficha") : "No hay ninguna marca: los entrenos van solo por pulso. Escribe una marca reciente o sube actividades", !m));
+  filas.push(fila("FTP (bici)", +ef.ftp ? `${ef.ftp} W` : "—", +a.ftp ? "Escrito en la ficha" : de.ftp ? "95 % de su mejor 20' con potenciómetro" : "Sin dato: la bici va por pulso"));
+  const disp = (a.disp || []).reduce((t, d) => t + (d.on ? Math.min(+d.max || 240, 240) : 0), 0);
+  filas.push(fila("Volumen semanal", +a.horas ? `${coma(a.horas)} h` : H?.horasMedia ? `desde ${coma(Math.round(H.horasMedia * 11) / 10)} h` : `~${coma(Math.round(disp * 0.8 / 6) / 10)} h`, +a.horas ? "Escrito en la ficha" : H?.horasMedia ? `Lo que entrenaba (${coma(H.horasMedia)} h/sem) + 10 %, y sube un 5 % por semana` : "El 80 % del tiempo disponible que marcaste (no hay historial)"));
+  filas.push(fila("Tirada larga", H?.largoRun ? `desde ${H.largoRun}'` : "Según objetivo", H?.largoRun ? "Su tirada más larga de las últimas 6 semanas, +5' por semana" : "Según objetivo y nivel, sin pasar del máximo de cada día"));
+  filas.push(fila("Actividades subidas", `${(a.actividades || []).length}`, (a.actividades || []).length ? `De ${fechaCorta(a.actividades[a.actividades.length - 1].fecha)} a ${fechaCorta(a.actividades[0].fecha)}` : "Ninguna todavía: sube su historial en «Datos»", !(a.actividades || []).length));
+  const b = Math.round(bmr(a));
+  const ajuste = a.objetivo === "bajar_peso" ? " · −18 % para bajar peso (salvo días duros)" : a.objetivo === "musculo" ? " · +10 % para ganar músculo" : "";
+  return `<article class="dia fuentes"><div class="dia-cab"><h3>De dónde sale cada dato</h3></div>
+    <div class="wrap"><table><tr><th>Dato</th><th>Valor</th><th>De dónde sale</th></tr>${filas.join("")}</table></div>
+    <h4 class="sep">Cómo se calcula el menú</h4>
+    <ul class="usa">
+      <li><b>Gasto en reposo</b>: ${b.toLocaleString("es-ES")} kcal (fórmula Mifflin-St Jeor con ${a.peso} kg, ${a.altura} cm, ${a.edad} años, ${a.sexo === "m" ? "mujer" : "hombre"}), × 1,35 por la vida diaria.</li>
+      <li><b>+ Cada entreno</b>: según deporte, intensidad, minutos y peso${ajuste}.</li>
+      <li><b>Hidratos</b> según la carga del día: descanso 3 g/kg · baja 4 · media 5,5 · alta 7 (y +1 la víspera de un día duro).</li>
+      <li><b>Proteína</b> ${a.objetivo === "bajar_peso" || a.objetivo === "musculo" ? "2" : "1,7"} g/kg · <b>grasa</b> el resto (entre 0,8 y 1,3 g/kg).</li>
+      <li>Los platos se reparten por comidas y las cantidades se ajustan para cuadrar esos números${a.dieta !== "omni" ? `, con dieta ${a.dieta === "veg" ? "vegetariana" : "vegana"}` : ""}${a.sinGluten ? ", sin gluten" : ""}${a.sinLactosa ? ", sin lactosa" : ""}.</li>
+    </ul></article>`;
 }
 
 /* ---------------- Carreras ---------------- */
@@ -436,6 +468,7 @@ const esDoc = f => /\.(pdf|png|jpe?g|webp|heic)$/i.test(f.name) || f.type.starts
 async function procesarArchivos(files, avisar) {
   const desde = desdePeriodo(), acts = [], docs = [], errores = [];
   let viejas = 0, masVieja = null;
+  const medidas = [];
   for (const f of files) {
     try {
       avisar(`Leyendo ${f.name}…`);
@@ -446,18 +479,19 @@ async function procesarArchivos(files, avisar) {
         docs.push({ id: uid(10), nombre: f.name, tipo: f.type || "application/pdf", tam: f.size, fecha: hoy(), datos });
       } else {
         const r = await leerArchivo(f, { desde: "0000", progreso: t => avisar(`${f.name}: ${t}`) });
-        for (const x of r) { if (x.fecha >= desde) acts.push(x); else { viejas++; if (!masVieja || x.fecha > masVieja) masVieja = x.fecha; } }
+        for (const x of r) { if (x.medida) medidas.push(x); else if (x.fecha >= desde) acts.push(x); else { viejas++; if (!masVieja || x.fecha > masVieja) masVieja = x.fecha; } }
       }
     } catch (e) { errores.push(`${f.name}: ${e.message}`); }
   }
   // la misma actividad puede venir dos veces en un ZIP (lista + archivo original): se juntan
-  return { acts: fusionar([], acts).lista, docs, errores, viejas, masVieja, desde, n: files.length };
+  return { acts: fusionar([], acts).lista, medidas, docs, errores, viejas, masVieja, desde, n: files.length };
 }
 /** Explicación de lo leído, para que nunca parezca que no ha pasado nada. */
 function htmlLeido(r) {
   const p = [`📂 ${r.n} archivo${r.n > 1 ? "s" : ""} leído${r.n > 1 ? "s" : ""}: <b>${r.acts.length} actividad${r.acts.length === 1 ? "" : "es"}</b> de los últimos ${PERIODOS[periodo]}${r.docs.length ? ` y ${r.docs.length} documento${r.docs.length > 1 ? "s" : ""}` : ""}.`];
   if (r.viejas) p.push(`<span class="alerta-l">⚠️ ${r.viejas} actividad${r.viejas > 1 ? "es son" : " es"} anterior${r.viejas > 1 ? "es" : ""} al ${fechaCorta(r.desde)} (la más reciente de ellas, del ${fechaCorta(r.masVieja)}) y no se ha${r.viejas > 1 ? "n" : ""} usado. Si las quieres, elige «1 año» y vuelve a subirlas.</span>`);
-  if (!r.acts.length && !r.viejas && !r.docs.length && !r.errores.length) p.push(`<span class="alerta-l">⚠️ No he encontrado actividades en ${r.n > 1 ? "esos archivos" : "ese archivo"}.</span>`);
+  if (r.medidas.length) p.push(`❤️ ${r.medidas.length} días de <b>pulso en reposo</b> (se usa la mediana de los últimos 60 días si la ficha no tiene uno).`);
+  if (!r.acts.length && !r.viejas && !r.docs.length && !r.errores.length && !r.medidas.length) p.push(`<span class="alerta-l">⚠️ No he encontrado actividades en ${r.n > 1 ? "esos archivos" : "ese archivo"}.</span>`);
   return `<p class="small">${p.join("<br>")}</p>${r.errores.length ? `<ul class="errores">${r.errores.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
 }
 const coma = x => String(x).replace(".", ",");
@@ -485,6 +519,7 @@ async function pintarDatos() {
     if (ef._de?.fcmax) usa.push(`<b>FC máxima</b>: ${H.fcMaxObs} ppm, la más alta registrada. Si nunca ha apretado a tope, la real será mayor: si la conoces, escríbela en la ficha.`);
     if (ef._de?.umbral) usa.push(`<b>FC de umbral</b>: ~${H.lthr} ppm, estimada con su mejor esfuerzo de 20' corriendo. Sus zonas salen de aquí.`);
     for (const [k, n] of [["5k", "5 km"], ["10k", "10 km"], ["media", "media maratón"], ["maraton", "maratón"]]) if (ef._de?.["m" + k]) usa.push(`<b>Marca de ${n}</b>: ${fmtHoras(H.mejores[k].s)} (${fechaCorta(H.mejores[k].fecha)}). De aquí salen sus ritmos.`);
+    if (ef._de?.fcrep) usa.push(`<b>FC en reposo</b>: ${H.fcRep} ppm (mediana de sus datos de los últimos 60 días).`);
     if (ef._de?.ftp) usa.push(`<b>FTP</b>: ~${H.ftpEst} W (95 % de su mejor 20').`);
     // Diferencias con lo escrito en la ficha
     if (H.fcMaxObs && +a.fc?.max && H.fcMaxObs > +a.fc.max) sug.push({ k: "fcmax", v: H.fcMaxObs, t: `En sus datos aparece una FC máx de <b>${H.fcMaxObs}</b> y la ficha dice ${a.fc.max}.` });
@@ -540,19 +575,23 @@ async function pintarDatos() {
 }
 
 /** Añade actividades al deportista y recalcula lo que se deduce de ellas. */
-function anadirActividades(a, nuevas) {
+function anadirActividades(a, nuevas, medidas = []) {
   const { lista, anadidas } = fusionar(a.actividades || [], nuevas);
   a.actividades = lista.slice(0, 1500);
-  a.hist = a.actividades.length ? resumen(a.actividades) : null;
-  return anadidas;
+  const m = new Map((a.medidas || []).map(x => [x.medida + x.fecha, x]));
+  for (const x of medidas) m.set(x.medida + x.fecha, x);
+  a.medidas = [...m.values()].sort((x, y) => y.fecha.localeCompare(x.fecha)).slice(0, 400);
+  recalcHist(a);
+  return anadidas + medidas.length;
 }
+const recalcHist = a => { a.hist = (a.actividades?.length || a.medidas?.length) ? resumen(a.actividades || [], a.medidas || []) : null; };
 
 async function importar(files) {
   const msg = $("#import-msg");
   const a = actual;
   const r = await procesarArchivos(files, t => { msg.innerHTML = `<p class="cargando">⏳ ${esc(t)}</p>`; });
   for (const d of r.docs) { try { await A.guardarArchivo(a, d); } catch (e) { r.errores.push(`${d.nombre}: ${e.message}`); } }
-  const nuevas = anadirActividades(a, r.acts);
+  const nuevas = anadirActividades(a, r.acts, r.medidas);
   let rehecho = "";
   try {
     await A.guardarFicha(a);
@@ -579,9 +618,9 @@ async function aplicarSug(lista) {
 }
 
 /* ---------------- Historial en el formulario ---------------- */
-let pendientes = { acts: [], docs: [] };
+let pendientes = { acts: [], docs: [], medidas: [] };
 function prepararSubidaForm() {
-  pendientes = { acts: [], docs: [] };
+  pendientes = { acts: [], docs: [], medidas: [] };
   $("#subida-form").innerHTML = htmlSubida("form");
   $("#form-hist-msg").innerHTML = editando?.hist ? `<p class="muted small">Ya tiene ${editando.actividades.length} actividades: ${htmlResumenCorto(editando.hist)}</p>` : "";
   enlazarSubida("form", async files => {
@@ -590,19 +629,19 @@ function prepararSubidaForm() {
     let r;
     try { r = await procesarArchivos(files, t => { msg.innerHTML = `<p class="cargando">⏳ ${esc(t)}</p>`; }); }
     finally { btn.disabled = false; btn.textContent = txt; }
-    pendientes.acts.push(...r.acts); pendientes.docs.push(...r.docs);
+    pendientes.acts.push(...r.acts); pendientes.docs.push(...r.docs); pendientes.medidas.push(...r.medidas);
     const { lista } = fusionar(editando?.actividades || [], pendientes.acts);
-    const H = lista.length ? resumen(lista) : null;
+    const H = lista.length ? resumen(lista, pendientes.medidas) : null;
     msg.innerHTML = `${htmlLeido(r)}${H ? `<p class="ok-msg">✅ Listo para guardar: ${lista.length} actividades</p><p class="small">${htmlResumenCorto(H)}</p>` : ""}
       ${pendientes.docs.length ? `<p class="small">📄 ${pendientes.docs.length} documento${pendientes.docs.length > 1 ? "s" : ""} listo${pendientes.docs.length > 1 ? "s" : ""} para guardar.</p>` : ""}
       ${H || pendientes.docs.length ? `<p class="muted small">Se guardan al pulsar el botón de abajo. Lo que dejes vacío en la ficha (pulso, marcas, FTP, horas) lo sacarán estos datos.</p>` : ""}`;
   });
 }
 async function guardarPendientes(a) {
-  if (pendientes.acts.length) anadirActividades(a, pendientes.acts);
+  if (pendientes.acts.length || pendientes.medidas.length) anadirActividades(a, pendientes.acts, pendientes.medidas);
   for (const d of pendientes.docs) { try { await A.guardarArchivo(a, d); } catch (e) { toast(`${d.nombre}: ${e.message}`); } }
-  const habia = pendientes.acts.length > 0;
-  pendientes = { acts: [], docs: [] };
+  const habia = pendientes.acts.length > 0 || pendientes.medidas.length > 0;
+  pendientes = { acts: [], docs: [], medidas: [] };
   archivos = [];
   return habia;
 }
@@ -701,7 +740,7 @@ function enlazar() {
       return;
     }
     if (acc === "aplicar") return aplicarSug([pintarDatos.sug[+t.dataset.i]]);
-    if (acc === "quitar-act") { a.actividades = a.actividades.filter(x => x.id !== t.dataset.id); a.hist = a.actividades.length ? resumen(a.actividades) : null; await A.guardarFicha(a); return pintarDatos(); }
+    if (acc === "quitar-act") { a.actividades = a.actividades.filter(x => x.id !== t.dataset.id); recalcHist(a); await A.guardarFicha(a); return pintarDatos(); }
     if (acc === "ver-doc") {
       const d = await A.leerArchivoGuardado(a, t.dataset.id);
       if (!d) return toast("No encuentro el archivo");

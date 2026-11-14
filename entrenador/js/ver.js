@@ -1,8 +1,8 @@
 /* Vista del deportista (solo lectura, con su enlace) */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, diasEntre } from "./util.js?v=202611140943";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion } from "./vista.js?v=202611140943";
-import { leerPublico } from "./almacen.js?v=202611140943";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611140943";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, diasEntre } from "./util.js?v=202611141259";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion } from "./vista.js?v=202611141259";
+import { leerPublico } from "./almacen.js?v=202611141259";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141259";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy());
 const semanas = () => Object.keys(P.semanas || {}).sort();

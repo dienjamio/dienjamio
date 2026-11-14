@@ -1,6 +1,6 @@
 /* Lectura de archivos de actividad: FIT, GPX, TCX y CSV (Garmin Connect / Strava).
    Todo se procesa en el navegador; solo se guarda el resumen de cada actividad. */
-import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611140943";
+import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141259";
 
 const DISTANCIAS = { "1k": 1000, "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 
@@ -21,7 +21,7 @@ async function leerBlob(blob, nombre, opt, prof) {
   if (e === "fit") return [deSerie(leerFIT(await datos.arrayBuffer()), "FIT", nombre)];
   if (e === "gpx") return [deSerie(leerGPX(await datos.text()), "GPX", nombre)];
   if (e === "tcx") return [deSerie(leerTCX((await datos.text()).trim()), "TCX", nombre)];
-  if (e === "csv") return leerCSV(await datos.text());
+  if (e === "csv") return leerCSV(await textoDe(datos));
   if (e === "json") return deJSON(await datos.text(), nombre);
   throw new Error("Formato no reconocido: usa .zip, .fit, .gpx, .tcx, .csv o .json");
 }
@@ -370,10 +370,26 @@ function fechaCSV(s) {
   return isNaN(t) ? null : iso(new Date(t));
 }
 const numero = s => { s = String(s ?? "").trim().replace(/[^\d.,:-]/g, ""); if (!s || s === "--") return null; if (/,\d{1,2}$/.test(s) && !/\.\d{3},/.test(s)) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/,/g, ""); const x = parseFloat(s); return isNaN(x) ? null : x; };
+/** Texto de un archivo respetando UTF-16 (algunas exportaciones de Garmin) o UTF-8. */
+async function textoDe(blob) {
+  const b = new Uint8Array(await blob.arrayBuffer());
+  if (b[0] === 0xFF && b[1] === 0xFE) return new TextDecoder("utf-16le").decode(b);
+  if (b[0] === 0xFE && b[1] === 0xFF) return new TextDecoder("utf-16be").decode(b);
+  return new TextDecoder("utf-8").decode(b);
+}
 function leerCSV(txt) {
-  const filas = partirCSV(txt.replace(/^﻿/, ""));
+  const filas = partirCSV(txt.replace(/^\uFEFF/, ""));
   if (filas.length < 2) throw new Error("El CSV está vacío");
   const cab = filas[0].map(normal);
+  // ¿Informe de pulso en reposo? (fecha + FC en reposo, sin distancias)
+  const cRep = cab.findIndex(c => /reposo|resting/.test(c));
+  if (cRep >= 0 && !cab.some(c => /^(distancia|distance)/.test(c))) {
+    let cF = cab.findIndex(c => /^(fecha|date|dia|day)/.test(c));
+    if (cF < 0) cF = cab.findIndex((_, i) => filas.slice(1, 6).some(f => fechaCSV(f[i] || "")));
+    const out = [];
+    for (const f of filas.slice(1)) { const fecha = fechaCSV(f[cF] || ""), v = numero(f[cRep]); if (fecha && v > 30 && v < 110) out.push({ medida: "fcrep", fecha, v: Math.round(v) }); }
+    if (out.length) return out;
+  }
   const col = (...nombres) => cab.findIndex(c => nombres.some(n => c === n)) >= 0 ? cab.findIndex(c => nombres.some(n => c === n)) : cab.findIndex(c => nombres.some(n => c.startsWith(n)));
   const cTipo = col("tipo de actividad", "activity type", "tipo", "type", "sport");
   const cFecha = col("fecha", "date", "activity date", "fecha de la actividad", "start time");
@@ -382,7 +398,10 @@ function leerCSV(txt) {
   const cFcMed = col("fc media", "avg hr", "average heart rate", "frecuencia cardiaca media");
   const cFcMax = col("fc maxima", "max hr", "max heart rate", "frecuencia cardiaca maxima");
   const cPot = col("potencia media", "avg power", "average watts");
-  if (cFecha < 0 || cDist < 0) throw new Error("No reconozco las columnas: exporta la lista de actividades de Garmin Connect o activities.csv de Strava");
+  if (cFecha < 0 || cDist < 0) {
+    const cols = filas[0].map(x => x.trim()).filter(Boolean).slice(0, 12).join(" · ");
+    throw new Error(`no es una lista de actividades. Columnas que trae: «${cols}». Para las actividades: Garmin Connect (web) → Actividades → Todas las actividades → «Exportar CSV». Si este archivo te interesa, mándale una captura de sus columnas a quien te mantiene la app.`);
+  }
   const esStrava = cab.includes("activity id");
   const out = [];
   for (const f of filas.slice(1)) {
@@ -408,8 +427,10 @@ function leerCSV(txt) {
 }
 
 /* ---------------- Resumen del historial ---------------- */
-export function resumen(acts) {
+export function resumen(acts, medidas = []) {
   const h = hoy();
+  const rep = medidas.filter(m => m.medida === "fcrep" && m.fecha >= sumaDias(h, -60)).map(m => m.v).sort((x, y) => x - y);
+  const fcRep = rep.length ? rep[Math.floor(rep.length / 2)] : null;
   const desde = sumaDias(h, -365);
   const rec = acts.filter(a => a.fecha >= desde);
   const fcMaxObs = Math.max(0, ...rec.map(a => a.fcMax || 0).filter(x => x < 225)) || null;
@@ -439,6 +460,6 @@ export function resumen(acts) {
   const lentas = conFC.slice(0, Math.max(1, Math.ceil(conFC.length / 2)));
   const mediana = arr => arr.slice().sort((a, b) => a - b)[Math.floor(arr.length / 2)];
   const suave = conFC.length >= 3 ? { ritmo: Math.round(mediana(lentas.map(x => x.ritmo))), fc: Math.round(mediana(lentas.map(x => x.fc))), n: conFC.length } : null;
-  return { fecha: h, n: acts.length, fcMaxObs, mejores, ftpEst: p20 ? Math.round(p20 * 0.95) : null, semanas, horasMedia, kmRun, sesiones, largoRun, lthr, suave };
+  return { fecha: h, n: acts.length, fcRep, fcMaxObs, mejores, ftpEst: p20 ? Math.round(p20 * 0.95) : null, semanas, horasMedia, kmRun, sesiones, largoRun, lthr, suave };
 }
 const sum = (w, dep, k) => Math.round(w.filter(a => a.dep === dep).reduce((t, a) => t + (a[k] || 0), 0) * 10) / 10;
