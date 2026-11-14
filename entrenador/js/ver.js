@@ -1,13 +1,15 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141906";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141906";
-import { leerArchivo, fusionar } from "./importar.js?v=202611141906";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141906";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141906";
-import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611141906";
-import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611141906";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141906";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141916";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141916";
+import { leerArchivo, fusionar } from "./importar.js?v=202611141916";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141916";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141916";
+import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611141916";
+import { htmlPrediccion } from "./prediccion.js?v=202611141916";
+import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611141916";
+import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611141916";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141916";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -36,7 +38,54 @@ async function init() {
   $("#main").addEventListener("change", e => { if (e.target.id === "bien-dolor") $("#bien-dolor-txt").hidden = !e.target.checked; });
   enlazarDialogos();
   pintar();
+  botonChat();
 }
+/* ---------------- Chat con el entrenador ---------------- */
+let chatRef = "", chatTimer = null;
+function botonChat() {
+  let b = $("#chat-flot");
+  if (!b) { b = document.createElement("button"); b.id = "chat-flot"; b.className = "chat-flot"; b.dataset.acc = "chat"; b.setAttribute("aria-label", "Chat con tu entrenador"); document.body.append(b); b.addEventListener("click", clic); }
+  const n = sinLeerDep(aportes).length;
+  b.innerHTML = `💬${n ? `<span class="badge">${n}</span>` : ""}`;
+}
+function dlgChat() {
+  let d = $("#dlg-chat");
+  if (!d) {
+    d = document.createElement("dialog"); d.id = "dlg-chat"; d.className = "hoja chat-dlg"; document.body.append(d);
+    d.addEventListener("click", clic);
+    d.addEventListener("close", () => { clearInterval(chatTimer); chatRef = ""; });
+  }
+  return d;
+}
+async function abrirChat(ref = "") {
+  chatRef = ref;
+  const d = dlgChat();
+  pintarChat();
+  if (!d.open) d.showModal();
+  await marcarLeidos();
+  clearInterval(chatTimer);
+  chatTimer = setInterval(async () => { try { const n = await listarAportes(token); const antes = aportes.filter(x => x.tipo === "mensaje").length; aportes = n; if (n.filter(x => x.tipo === "mensaje").length !== antes) { pintarChat(); marcarLeidos(); } } catch (e) { } }, 20000);
+}
+function pintarChat() {
+  const d = dlgChat(), txt = $("#chat-txt")?.value || "";
+  d.innerHTML = `<div class="dia-cab"><h3>💬 Tu entrenador</h3><button class="icon-btn" data-acc="chat-cerrar" aria-label="Cerrar">✕</button></div>
+    <div class="chat-hilo" id="chat-hilo">${htmlHilo(aportes, "deportista")}</div>${htmlCaja(chatRef)}`;
+  $("#chat-txt").value = txt;
+  const h = $("#chat-hilo"); h.scrollTop = h.scrollHeight;
+}
+async function marcarLeidos() {
+  const pend = sinLeerDep(aportes);
+  for (const m of pend) { m.leido = true; try { await guardarAporte(token, m.id, { tipo: "mensaje", leido: true }); } catch (e) { } }
+  botonChat();
+}
+async function enviarChat() {
+  const t = $("#chat-txt").value.trim(); if (!t) return;
+  const id = idMensaje(), m = { tipo: "mensaje", de: "deportista", texto: t, t: new Date().toISOString(), visto: false, ...(chatRef ? { ref: chatRef } : {}) };
+  try { await guardarAporte(token, id, m); } catch (e) { return toast("No se ha podido enviar: " + (e.code || e.message)); }
+  aportes.push({ ...m, id }); chatRef = "";
+  $("#chat-txt").value = ""; pintarChat(); toast("Enviado a tu entrenador");
+}
+
 function fallo(t) { $("#main").innerHTML = `<div class="panel vacio"><div class="big">😕</div><p>${esc(t)}</p></div>`; }
 
 function navSemana() {
@@ -102,13 +151,14 @@ function pintar() {
       ${cs.length ? cs.map(c => htmlCarreraFicha(c, false, c.prev) + (c.fecha >= hoy() && c.prev ? `<details class="prev-det" ${cs.indexOf(c) === cs.findIndex(x => x.fecha >= hoy()) ? "open" : ""}><summary>Mi previsión kilómetro a kilómetro</summary>${htmlPrevision(c, c.prev)}</details>` : "")).join("") : `<p class="muted">Sin carreras apuntadas.</p>`}
       ${props.length ? `<h4 class="sep">Propuestas (pendientes de tu entrenador)</h4>${props.map(x => `<div class="propuesta"><div><b>${esc(x.nombre)}</b> <span class="small">· ${fechaCorta(x.fecha)} · ${esc(PRUEBAS[x.prueba] || "")}</span></div><button class="quita" data-acc="quitar-prop" data-id="${x.id}" aria-label="Quitar">✕</button></div>`).join("")}` : ""}
     </article>
+    ${htmlPrediccion(P.pred, P.zonas, cs.find(c => c.fecha >= hoy()))}
     ${P.zonas ? `<article class="dia zonas">${htmlZonas(P.zonas)}</article>` : ""}
     <p class="aviso">Actualizado el ${new Date(P.actualizado).toLocaleString("es-ES", { dateStyle: "long", timeStyle: "short" })}.</p>`;
   } else {
     const propio = calcProgreso({ semanas: P.semanas, aportes }), L = logros();
     m.innerHTML = `<article class="dia medallas"><div class="dia-cab"><h3>🏅 Mis medallas</h3><span class="muted small">${L.M.filter(x => x[0]).length} de ${L.M.length}</span></div>
       <div class="med">${L.M.map(([ok, i, t]) => `<div class="${ok ? "ok" : ""}"><span>${ok ? i : "🔒"}</span><small>${t}</small></div>`).join("")}</div>
-      <p class="small">🔥 Racha: <b>${L.racha}</b> semana${L.racha === 1 ? "" : "s"} seguidas entrenando · ✅ ${L.n} entrenos registrados${L.km ? ` · 🛣️ ${Math.round(L.km)} km` : ""}${L.kmAno ? ` · 🗓️ ${L.kmAno} km este año` : ""}</p></article>` + htmlCarga(miCarga(), "Mi forma") + htmlZapatillas() + htmlProgreso(mezclarProgreso(P.progreso || [], propio)) + (htmlActividades(actividades().filter(a => a.fecha >= sumaDias(hoy(), -84)), "Mis actividades") || `<p class="muted small">Cuando registres entrenos subiendo el archivo de tu reloj (o tu entrenador suba tu historial), aquí verás todas tus actividades con sus datos.</p>`);
+      <p class="small">🔥 Racha: <b>${L.racha}</b> semana${L.racha === 1 ? "" : "s"} seguidas entrenando · ✅ ${L.n} entrenos registrados${L.km ? ` · 🛣️ ${Math.round(L.km)} km` : ""}${L.kmAno ? ` · 🗓️ ${L.kmAno} km este año` : ""}</p></article>` + htmlPrediccion(P.pred, P.zonas, (P.carreras || []).filter(c => c.fecha >= hoy()).sort((x, y) => x.fecha.localeCompare(y.fecha))[0]) + htmlCarga(miCarga(), "Mi forma") + htmlZapatillas() + htmlProgreso(mezclarProgreso(P.progreso || [], propio)) + (htmlActividades(actividades().filter(a => a.fecha >= sumaDias(hoy(), -84)), "Mis actividades") || `<p class="muted small">Cuando registres entrenos subiendo el archivo de tu reloj (o tu entrenador suba tu historial), aquí verás todas tus actividades con sus datos.</p>`);
   }
 }
 /* Calendario: un evento de día completo por sesión (.ics, lo abren Google Calendar, iPhone, Outlook…) */
@@ -278,6 +328,11 @@ async function clic(e) {
     $("#dlg-reg").returnValue = ""; $("#dlg-reg").showModal();
     return;
   }
+  if (acc === "chat") return abrirChat();
+  if (acc === "chat-ses") { const r = buscarSesion(b.dataset.id); return abrirChat(r ? `${r.s.t} (${DIAS[r.i]} ${fechaCorta(sumaDias(r.l, r.i))})` : ""); }
+  if (acc === "chat-cerrar") return dlgChat().close();
+  if (acc === "chat-sin-ref") { chatRef = ""; return pintarChat(); }
+  if (acc === "chat-enviar") return enviarChat();
   if (acc === "bien") {
     bienTmp = { ...(bienTmp || bienDe(hoy()) || {}), [b.dataset.k]: +b.dataset.v, dolor: $("#bien-dolor")?.checked || false, dolorTxt: $("#bien-dolor-txt")?.value || "" };
     return pintar();

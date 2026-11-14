@@ -1,14 +1,17 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141906";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141906";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141906";
-import { BIBLIO } from "./biblioteca.js?v=202611141906";
-import { leerTrack, prevision } from "./carrera.js?v=202611141906";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141906";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611141906";
-import { calcProgreso } from "./progreso.js?v=202611141906";
-import * as A from "./almacen.js?v=202611141906";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141906";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141916";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141916";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141916";
+import { BIBLIO } from "./biblioteca.js?v=202611141916";
+import { leerTrack, prevision } from "./carrera.js?v=202611141916";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141916";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611141916";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611141916";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611141916";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611141916";
+import { calcProgreso } from "./progreso.js?v=202611141916";
+import * as A from "./almacen.js?v=202611141916";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141916";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -174,7 +177,7 @@ function htmlEquipo(atletas) {
     <div class="${graves ? "mal" : ""}"><b>${graves}</b><span>con avisos importantes</span></div>
   </div>`;
 }
-const nuevos = a => (a._aportes || []).filter(x => x.tipo !== "visita" && !x.visto && !(x.tipo === "carrera" && x.estado && x.estado !== "pendiente"));
+const nuevos = a => (a._aportes || []).filter(x => x.tipo !== "visita" && !(x.tipo === "mensaje" && x.de === "entrenador") && !x.visto && !(x.tipo === "carrera" && x.estado && x.estado !== "pendiente"));
 const visitas = a => (a._aportes || []).find(x => x.tipo === "visita");
 function hace(isoTxt) {
   const min = Math.round((Date.now() - Date.parse(isoTxt)) / 60000);
@@ -187,6 +190,7 @@ function htmlVisitas(a) {
   return `<span class="vis ${Date.now() - Date.parse(v.ultima) > 4 * 86400000 ? "frio" : "ok"}">👁️ ${v.n} visita${v.n === 1 ? "" : "s"} · última ${hace(v.ultima)} · ${estaSemana} día${estaSemana === 1 ? "" : "s"} esta semana</span>`;
 }
 /* Alertas de carga y de seguimiento */
+const predDe = a => { const Z = calcZonas(a); return predecir({ actividades: a.actividades || [], aportes: a._aportes || [], semanas: a.semanas || {}, Z: { fcmax: Z.fcmax, fcrep: Z.fcrep } }); };
 const cargaDe = a => { const Z = calcZonas(a); return calcCarga({ semanas: a.semanas || {}, aportes: a._aportes || [], actividades: a.actividades || [], Z: { fcmax: Z.fcmax, fcrep: Z.fcrep }, mujer: a.sexo === "m" }); };
 const bienestares = a => (a._aportes || []).filter(x => x.tipo === "bienestar").sort((x, y) => y.fecha.localeCompare(x.fecha));
 const zapatillas = a => (a._aportes || []).find(x => x.id === "material")?.zap || [];
@@ -246,7 +250,7 @@ function alertas(a) {
 const htmlAlertas = a => { const al = alertas(a); return al.length ? `<div class="alertas">${al.map(x => `<span class="alerta-c${x.g ? " grave" : ""}">${esc(x.t)}</span>`).join("")}</div>` : ""; };
 function resumenNuevos(a) {
   const n = nuevos(a), c = t => n.filter(x => x.tipo === t).length;
-  return [c("bienestar") && `${c("bienestar")} día${c("bienestar") > 1 ? "s" : ""} de bienestar`, c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
+  return [c("mensaje") && `💬 ${c("mensaje")} mensaje${c("mensaje") > 1 ? "s" : ""}`, c("bienestar") && `${c("bienestar")} día${c("bienestar") > 1 ? "s" : ""} de bienestar`, c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
 }
 
 /* =========================================================
@@ -419,6 +423,7 @@ async function publicar(a) {
         track: c.track ? { dist: c.track.dist, sube: c.track.sube, baja: c.track.baja, kms: c.track.kms, perfil: c.track.perfil } : null, prev: prevision(c, Z) })),
       progreso,
       marcas: a.marcas || {},
+      pred: predDe(a),
       kmAno: Math.round((a.actividades || []).filter(x => x.dep === "run" && x.fecha >= hoy().slice(0, 4) + "-01-01").reduce((t, x) => t + (+x.km || 0), 0)),
       carrerasHechas: (a.carreras || []).filter(c => c.fecha < hoy()).length,
       videos: ajustes.videos || {},
@@ -493,6 +498,7 @@ function pintarAtleta() {
       </div>
     </div>`;
   $$("#subtabs [data-sub]").forEach(b => b.setAttribute("aria-selected", b.dataset.sub === sub));
+  { const n = sinLeerEnt(a._aportes).length, b = $('#subtabs [data-sub="chat"]'); if (b) b.innerHTML = `💬 Chat${n ? ` <span class="badge">${n}</span>` : ""}`; }
   const conSemana = sub === "semana" || sub === "menu";
   $("#weeknav").hidden = !conSemana;
   if (conSemana) {
@@ -521,10 +527,63 @@ function pintarAtleta() {
       : snap.dias.map((_, i) => htmlMenuDia(snap, i, true)).join("") + `<p class="aviso">Menú orientativo calculado según la carga de cada día. No sustituye a un dietista-nutricionista.</p>`;
   } else if (sub === "carreras") pintarCarreras();
   else if (sub === "plan") pintarPlan();
-  else if (sub === "progreso") el.innerHTML = htmlCarga(cargaDe(a)) + htmlBienTrainer(a) + htmlZapasTrainer(a) + htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }))
+  else if (sub === "progreso") el.innerHTML = `<div class="fila inf-bot"><button class="btn pri mini" data-acc="informe">📄 Informe del mes (PDF)</button></div>` + htmlPrediccion(predDe(a), calcZonas(a), prox, true) + htmlCarga(cargaDe(a)) + htmlBienTrainer(a) + htmlZapasTrainer(a) + htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }))
     + (htmlActividades((a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep)), "Sus actividades (12 semanas)") || `<p class="muted small">Sin actividades: súbelas en «Datos» o pídele que suba el archivo de su reloj al registrar cada entreno.</p>`);
   else if (sub === "datos") pintarDatos();
+  else if (sub === "chat") pintarChat();
   else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>${htmlFuentes(a)}`;
+}
+
+/* ---------------- Chat ---------------- */
+async function pintarChat() {
+  const a = actual, el = $("#sub");
+  el.innerHTML = `<article class="dia chat"><div class="dia-cab"><h3>💬 Chat con ${esc(a.nombre.split(" ")[0])}</h3><button class="btn sec mini" data-acc="chat-recargar">↻</button></div>
+    <div class="chat-hilo" id="chat-hilo">${htmlHilo(a._aportes, "entrenador", a.nombre)}</div>${htmlCaja()}</article>
+    ${A.nube ? "" : `<p class="aviso">Sin conectar Firebase los mensajes solo se guardan en este navegador.</p>`}`;
+  const hilo = $("#chat-hilo"); hilo.scrollTop = hilo.scrollHeight;
+  const pend = sinLeerEnt(a._aportes);
+  if (pend.length) {
+    for (const m of pend) { m.visto = true; try { await A.marcarAporte(a.token, m.id, { visto: true }); } catch (e) { } }
+    pintarLista();
+    const b = $('#subtabs [data-sub="chat"]'); if (b) b.textContent = "💬 Chat";
+  }
+}
+async function enviarMensaje(a) {
+  const t = $("#chat-txt").value.trim(); if (!t) return;
+  const id = idMensaje(), m = { tipo: "mensaje", de: "entrenador", texto: t, t: new Date().toISOString(), leido: false };
+  try { await A.guardarAporte(a.token, id, m); } catch (e) { return toast("No se ha podido enviar: " + (e.code || e.message)); }
+  (a._aportes = a._aportes || []).push({ ...m, id, cuando: m.t });
+  pintarChat();
+  if (a.telefono) toast("Enviado. Lo verá al abrir su enlace (si quieres, avísale con 📣).");
+  else toast("Enviado");
+}
+
+/* ---------------- Informe mensual ---------------- */
+function dialogoInforme(a) {
+  const ms = ultimosMeses(6), def = new Date().getDate() <= 7 ? ms[1] : ms[0];
+  dialogo(`<h3>📄 Informe del mes</h3>
+    <label>Mes<select id="inf-mes">${ms.map(m => `<option value="${m}" ${m === def ? "selected" : ""}>${nombreMes(m)}</option>`).join("")}</select></label>
+    <label>Tu valoración (sale en el informe)<textarea id="inf-com" rows="5" placeholder="Qué ha ido bien, qué mejorar y el objetivo del mes que viene…"></textarea></label>
+    ${claveClaude() ? `<button class="btn sec mini" data-acc="ia-informe">🤖 Redactar con Claude</button>` : ""}
+    <p class="small">Se abre la ventana de imprimir: elige <b>«Guardar como PDF»</b> y luego mándaselo por WhatsApp o correo.</p>
+    <div class="fila"><button class="btn sec" data-acc="cerrar-dlg">Cancelar</button><button class="btn pri" data-acc="crear-informe">Crear PDF</button></div>`);
+}
+function datosInforme(a, mes, comentario = "") {
+  const Z = calcZonas(a);
+  const carga = calcCarga({ semanas: a.semanas || {}, aportes: a._aportes || [], actividades: a.actividades || [], Z: { fcmax: Z.fcmax, fcrep: Z.fcrep }, mujer: a.sexo === "m", dias: 200 });
+  return { a: { ...a, _objetivoTxt: OBJ[a.objetivo] }, mes, carga, pred: predDe(a), entrenador: ajustes.presentacion?.nombre || "", comentario };
+}
+function crearInforme(a) {
+  const mes = $("#inf-mes").value, com = $("#inf-com").value.trim();
+  let cont = $("#informe");
+  if (!cont) { cont = document.createElement("div"); cont.id = "informe"; document.body.append(cont); }
+  cont.innerHTML = htmlInforme(datosInforme(a, mes, com));
+  $("#dlg-gen").close();
+  document.body.classList.add("imprime-informe");
+  const fin = () => { document.body.classList.remove("imprime-informe"); window.removeEventListener("afterprint", fin); };
+  window.addEventListener("afterprint", fin);
+  const titulo = document.title; document.title = `Informe ${a.nombre} ${nombreMes(mes)}`;
+  setTimeout(() => { window.print(); document.title = titulo; setTimeout(fin, 1500); }, 300);
 }
 
 /* ---------------- Valoración semanal y ajuste ---------------- */
@@ -705,6 +764,7 @@ function htmlNovedades(a) {
   const lin = n.sort((x, y) => (y.cuando || "").localeCompare(x.cuando || "")).slice(0, 6).map(x => {
     if (x.tipo === "sesion") return `<li>✅ Registró un entreno (${esc(x.dia != null ? DIAS[x.dia] : "")} ${x.lunes ? fechaCorta(sumaDias(x.lunes, x.dia || 0)) : ""})${x.texto ? `: “${esc(x.texto.slice(0, 80))}”` : ""}</li>`;
     if (x.tipo === "bienestar") { const pb = puntuarBien(x); return `<li>${nivelBien(pb) === "ok" ? "✅" : nivelBien(pb) === "ojo" ? "🟡" : "🔴"} Se levantó el ${fechaCorta(x.fecha)}: <b>${pb}/100</b>${x.dolor ? ` · 🤕 ${esc(x.dolorTxt || "dolor")}` : ""}</li>`; }
+    if (x.tipo === "mensaje") return `<li>💬 <b>Mensaje</b>${x.ref ? ` sobre ${esc(x.ref)}` : ""}: “${esc((x.texto || "").slice(0, 90))}” → <button class="link" data-sub="chat">responder</button></li>`;
     if (x.tipo === "material") return `<li>👟 Ha actualizado sus zapatillas → míralas en «Progreso»</li>`;
     if (x.tipo === "semana") return `<li>📝 Valoró la semana del ${fechaCorta(x.lunes)}: <b>${SENS_TXT[x.sensacion] || "—"}</b>${x.molestias ? " · ⚠️ molestias" : ""}</li>`;
     return `<li>🏁 Propone la carrera <b>${esc(x.nombre)}</b> (${fechaCorta(x.fecha)}) → mírala en «Carreras»</li>`;
@@ -1202,6 +1262,28 @@ function enlazar() {
       toast("Semana generada"); return pintarAtleta();
     }
     if (acc === "imprimir") return window.print();
+    if (acc === "chat-enviar") return enviarMensaje(a);
+    if (acc === "chat-recargar") { try { a._aportes = await A.listarAportes(a.token); } catch (e) { } return pintarChat(); }
+    if (acc === "informe") return dialogoInforme(a);
+    if (acc === "crear-informe") return crearInforme(a);
+    if (acc === "cerrar-dlg") return $("#dlg-gen").close();
+    if (acc === "ia-informe") {
+      const b = t; b.disabled = true; b.textContent = "🤖 Pensando…";
+      try {
+        const d = datosInforme(a, $("#inf-mes").value);
+        const tmp = document.createElement("div"); tmp.innerHTML = htmlInforme(d);
+        const txt = await analizar("Redacta la valoración del entrenador para este informe mensual: 4-6 frases en segunda persona dirigidas al deportista, cercanas y concretas (qué ha ido bien con datos, qué mejorar y el foco del mes que viene). Sin saludos ni firma.", `Informe:\n${tmp.innerText}`);
+        $("#inf-com").value = txt;
+      } catch (e) { toast(e.message); }
+      b.disabled = false; b.textContent = "🤖 Redactar con Claude"; return;
+    }
+    if (acc === "usar-pred") {
+      const pr = predDe(a); if (!pr) return;
+      if (!confirm(`¿Actualizar sus ritmos con su forma actual (10 km en ${fmtHoras(pr.tiempos["10k"])})? Se rehacen las semanas futuras que no hayas cambiado a mano.`)) return;
+      a.marcas = { ...(a.marcas || {}), "10k": fmtHoras(pr.tiempos["10k"]) }; delete a.marcas["5k"];
+      await A.guardarFicha(a); await actualizarFuturas(a); await publicar(a);
+      toast("Ritmos actualizados con su forma actual"); return pintarAtleta();
+    }
     if (acc === "editar-ses") { const snap = a.semanas[lunesVista]; const dia = snap.dias.findIndex(d => d.ses.some(s => s.id === t.dataset.id)); return abrirSesion(dia, t.dataset.id); }
     if (acc === "add-ses") return abrirSesion(+t.dataset.dia, null);
     if (acc === "otro-menu") {

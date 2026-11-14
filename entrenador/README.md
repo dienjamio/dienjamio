@@ -9,3 +9,11 @@
 - **Tiempo** (Open-Meteo, sin clave): mejor hora para entrenar y ajuste de ritmo por calor y humedad.
 - **Zapatillas**: km automáticos, aviso a los 600 y 800 km.
 - Necesita en las reglas de Firestore los tipos `bienestar` y `material` (ver `firestore.rules`).
+
+## Chat, predicción e informe mensual
+
+- **Chat** entrenador ↔ deportista (pestaña 💬 Chat / botón flotante), también sobre un entreno concreto. Con ✓✓ de leído.
+- **Predicción de carrera** que se actualiza sola (carreras y tests, ritmo frente a pulso en rodajes y mejores tramos de las últimas 8 semanas),
+  con botón para actualizar los ritmos del plan a su forma actual.
+- **Informe mensual en PDF** (Progreso → 📄 Informe del mes), con valoración del entrenador (opcionalmente redactada con Claude).
+- Reglas: el tipo `mensaje` también tiene que estar permitido en `aportes`.

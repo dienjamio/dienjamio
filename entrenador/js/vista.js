@@ -1,7 +1,7 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141906";
-import { infoEjercicio } from "./biblioteca.js?v=202611141906";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611141906";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141916";
+import { infoEjercicio } from "./biblioteca.js?v=202611141916";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611141916";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -111,7 +111,7 @@ export function htmlSesion(s, ed = false, op = {}) {
     ${s.coment ? `<div class="coment">💬 <b>Tu entrenador:</b> ${esc(s.coment)}</div>` : ""}
     ${ed && reg ? `<div class="ses-acc"><button class="btn sec mini" data-acc="comentar" data-id="${s.id}">💬 ${s.coment ? "Cambiar comentario" : "Comentar"}</button></div>` : ""}
     ${ed ? `<div class="ses-acc"><button class="btn sec mini" data-acc="editar-ses" data-id="${s.id}">✎ Cambiar</button></div>` : ""}
-    ${op.registrar ? `<div class="ses-acc">${reg ? `<button class="btn sec mini" data-acc="registrar" data-id="${s.id}">✎ Cambiar mi registro</button>` : `<button class="btn pri mini" data-acc="hecho-rapido" data-id="${s.id}">✅ Hecho</button><button class="btn sec mini" data-acc="registrar" data-id="${s.id}">📝 Con detalles</button>`}</div>` : ""}
+    ${op.registrar ? `<div class="ses-acc">${reg ? `<button class="btn sec mini" data-acc="registrar" data-id="${s.id}">✎ Cambiar mi registro</button>` : `<button class="btn pri mini" data-acc="hecho-rapido" data-id="${s.id}">✅ Hecho</button><button class="btn sec mini" data-acc="registrar" data-id="${s.id}">📝 Con detalles</button>`}<button class="btn sec mini" data-acc="chat-ses" data-id="${s.id}" aria-label="Preguntar a tu entrenador sobre este entreno">💬</button></div>` : ""}
   </div>`;
 }
 
