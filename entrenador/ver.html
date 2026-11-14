@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#000000">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/icon-192.png">
-<link rel="stylesheet" href="styles.css?v=202611141816">
+<link rel="stylesheet" href="styles.css?v=202611141819">
 </head>
 <body class="deportista">
 <header class="top">
@@ -44,9 +44,11 @@
     </div>
     <label>¿Cómo te has sentido? <textarea name="texto" rows="2" placeholder="Piernas, sensaciones, lo que quieras contar…"></textarea></label>
     <div class="foto-reg">
-      <label class="btn sec mini">📷 Añadir captura del reloj o de Strava <input type="file" id="reg-foto-in" accept="image/*" hidden></label>
-      <button type="button" class="quita" id="reg-quitar" hidden>Quitar foto</button>
-      <div id="reg-foto"></div>
+      <label class="btn sec mini">⌚ Subir la actividad (.fit, .gpx, .tcx) <input type="file" id="reg-act-in" hidden></label>
+      <div class="small" id="reg-act"></div>
+      <label class="btn sec mini">📷 Añadir capturas (Strava, reloj…) <input type="file" id="reg-foto-in" accept="image/*" multiple hidden></label>
+      <span class="small muted">Hasta 8 fotos</span>
+      <div id="reg-fotos" class="fotos-ed"></div>
     </div>
     <div class="acciones fila"><span class="sp"></span><button value="cancelar" class="btn sec mini" formnovalidate>Cancelar</button><button value="guardar" class="btn pri mini">Guardar</button></div>
   </form>
@@ -94,6 +96,6 @@
   </form>
 </dialog>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/ver.js?v=202611141816"></script>
+<script type="module" src="js/ver.js?v=202611141819"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
      entrenadores/{uid}/deportistas/{id}/semanas/{lunes}   plan de cada semana
      entrenadores/{uid}/deportistas/{id}/archivos/{fid}    PDF e informes (hasta ~700 KB)
      publico/{token}                                 lo que ve el deportista con su enlace */
-import { firebaseConfig } from "./firebase-config.js?v=202611141816";
+import { firebaseConfig } from "./firebase-config.js?v=202611141819";
 
 const V = "10.12.2";
 const SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}.js`;
@@ -143,6 +143,21 @@ export async function marcarAporte(token, id, cambios) {
   await cargarFirebase();
   await fb.setDoc(fb.doc(db, "publico", token, "aportes", id), sinAnidar(cambios), { merge: true });
 }
+/* Fotos de los entrenos: cada una en su documento (publico/{token}/fotos/{id}) para que quepan muchas */
+export async function guardarFoto(token, id, img) {
+  await cargarFirebase();
+  await fb.setDoc(fb.doc(db, "publico", token, "fotos", id), { img, cuando: new Date().toISOString() });
+}
+export async function leerFoto(token, id) {
+  await cargarFirebase();
+  const d = await fb.getDoc(fb.doc(db, "publico", token, "fotos", id));
+  return d.exists() ? d.data().img : null;
+}
+export async function borrarFoto(token, id) {
+  await cargarFirebase();
+  await fb.deleteDoc(fb.doc(db, "publico", token, "fotos", id));
+}
+
 /** Cuenta una visita del deportista a su enlace. */
 export async function registrarVisita(token, dia) {
   await cargarFirebase();

@@ -1,6 +1,6 @@
 /* Lectura de archivos de actividad: FIT, GPX, TCX y CSV (Garmin Connect / Strava).
    Todo se procesa en el navegador; solo se guarda el resumen de cada actividad. */
-import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141816";
+import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141819";
 
 const DISTANCIAS = { "1k": 1000, "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 
@@ -118,7 +118,7 @@ function deGarminJSON(lista) {
     if (!t) return null;
     const dep = deporteDe(x.activityType?.typeKey || x.activityType || x.sportType || x.name);
     const km = Math.round((x.distance || 0) * fDist / 10) / 100, dur = Math.round((x.duration || x.elapsedDuration || 0) * fDur);
-    const act = { id: `${iso(new Date(t))}-${dep}-${Math.round(km * 100)}-${dur}`, fecha: iso(new Date(t)), dep, fuente: "Garmin", km, dur,
+    const act = { id: `${iso(new Date(t))}-${dep}-${Math.round(km * 100)}-${dur}`, fecha: iso(new Date(t)), dep, fuente: "Garmin", km, dur, titulo: x.name ? String(x.name).slice(0, 60) : undefined,
       fcMed: x.avgHr ? Math.round(x.avgHr) : null, fcMax: x.maxHr ? Math.round(x.maxHr) : null, potMed: x.avgPower ? Math.round(x.avgPower) : null, mejores: {} };
     if (x.max20MinPower) act.p20 = Math.round(x.max20MinPower);
     if (dep === "run") marcasPorDistancia(act);
@@ -405,6 +405,7 @@ function leerCSV(txt) {
   }
   const col = (...nombres) => cab.findIndex(c => nombres.some(n => c === n)) >= 0 ? cab.findIndex(c => nombres.some(n => c === n)) : cab.findIndex(c => nombres.some(n => c.startsWith(n)));
   const cTipo = col("tipo de actividad", "activity type", "tipo", "type", "sport");
+  const cNombre = col("activity name", "titulo", "nombre de la actividad", "title");
   const cFecha = col("fecha", "date", "activity date", "fecha de la actividad", "start time");
   const cDist = col("distancia", "distance");
   const cTiempo = col("tiempo", "time", "elapsed time", "duracion", "duration", "tiempo transcurrido", "moving time");
@@ -432,6 +433,7 @@ function leerCSV(txt) {
       fcMed: cFcMed >= 0 ? numero(f[cFcMed]) : null, fcMax: cFcMax >= 0 ? numero(f[cFcMax]) : null,
       potMed: cPot >= 0 ? numero(f[cPot]) : null, mejores: {}
     };
+    if (cNombre >= 0 && f[cNombre]) act.titulo = String(f[cNombre]).slice(0, 60);
     if (dep === "run") marcasPorDistancia(act);
     out.push(act);
   }

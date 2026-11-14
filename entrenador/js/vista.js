@@ -1,7 +1,7 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141816";
-import { infoEjercicio } from "./biblioteca.js?v=202611141816";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141816";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141819";
+import { infoEjercicio } from "./biblioteca.js?v=202611141819";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141819";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -14,8 +14,36 @@ export function htmlRegistro(r) {
   return `<div class="registro ${esc(r.hecho || "si")}">
     <div class="reg-cab"><b>${e[0]} ${e[1]}</b>${datos ? `<span>${datos}</span>` : ""}</div>
     ${r.texto ? `<p>“${esc(r.texto)}”</p>` : ""}
-    ${r.img ? `<button class="miniatura" data-acc="ver-img" data-src="${esc(r.id || "")}"><img src="${r.img}" alt="Captura del entreno"></button>` : ""}
+    ${r.act ? `<div class="act-l">⌚ ${htmlDatosAct(r.act)}</div>` : ""}
+    ${(r.thumbs?.length || r.img) ? `<div class="fotos-reg">${r.img ? `<button class="miniatura" data-acc="ver-img"><img src="${r.img}" alt="Captura del entreno"></button>` : ""}${(r.thumbs || []).map((t, i) => `<button class="miniatura" data-acc="ver-foto" data-f="${esc(r.fotos?.[i] || "")}"><img src="${t}" alt="Captura ${i + 1}"></button>`).join("")}</div>` : ""}
   </div>`;
+}
+
+/* ---------- Actividades reales (del reloj / Strava) ---------- */
+const ICO = { run: "🏃", bike: "🚴", swim: "🏊", fuerza: "🏋️", andar: "🚶", otro: "•" };
+export function htmlDatosAct(a) {
+  const p = [];
+  if (a.km) p.push(`<b>${String(a.km).replace(".", ",")} km</b>`);
+  if (a.dur) p.push(fmtHoras(a.dur));
+  if (a.dep === "run" && a.km && a.dur) p.push(`${fmtRitmo(a.dur / a.km)} /km`);
+  if (a.dep === "bike" && a.km && a.dur) p.push(`${String(Math.round(a.km / a.dur * 36000) / 10).replace(".", ",")} km/h`);
+  if (a.dep === "swim" && a.km && a.dur) p.push(`${fmtRitmo(a.dur / (a.km * 10))} /100 m`);
+  if (a.fcMed) p.push(`❤️ ${a.fcMed}${a.fcMax ? `/${a.fcMax}` : ""} ppm`);
+  if (a.potMed) p.push(`⚡ ${a.potMed} W`);
+  return p.join(" · ");
+}
+export function htmlActividades(acts, titulo = "Actividades") {
+  if (!acts?.length) return "";
+  const porSemana = {};
+  for (const a of acts) { const l = sumaDias(a.fecha, -((new Date(a.fecha + "T12:00").getDay() + 6) % 7)); (porSemana[l] = porSemana[l] || []).push(a); }
+  return `<article class="dia actividades"><div class="dia-cab"><h3>⌚ ${esc(titulo)}</h3><span class="muted small">${acts.length}</span></div>
+    ${Object.keys(porSemana).sort().reverse().map(l => {
+      const w = porSemana[l].sort((x, y) => y.fecha.localeCompare(x.fecha));
+      const km = w.filter(x => x.dep === "run").reduce((t, x) => t + (x.km || 0), 0), h = w.reduce((t, x) => t + (x.dur || 0), 0);
+      return `<details class="sem-act" ${l === Object.keys(porSemana).sort().reverse()[0] ? "open" : ""}><summary><b>${rangoSemana(l)}</b><span>${w.length} actividad${w.length > 1 ? "es" : ""} · ${fmtHoras(h)}${km ? ` · ${String(Math.round(km * 10) / 10).replace(".", ",")} km corriendo` : ""}</span></summary>
+        ${w.map(a => `<div class="act"><span class="ic">${ICO[a.dep] || "•"}</span><div><b>${DIAS[(new Date(a.fecha + "T12:00").getDay() + 6) % 7]} ${fechaCorta(a.fecha)}</b>${a.titulo ? ` · ${esc(a.titulo)}` : ""}<div class="small">${htmlDatosAct(a)}</div></div></div>`).join("")}
+      </details>`;
+    }).join("")}</article>`;
 }
 
 export function htmlSesion(s, ed = false, op = {}) {
@@ -40,12 +68,14 @@ export function htmlSesion(s, ed = false, op = {}) {
 export function htmlDia(snap, i, ed = false, op = {}) {
   const d = snap.dias[i];
   const fecha = sumaDias(snap.lunes, i);
+  const hechas = (op.acts || []).filter(a => a.fecha === fecha && ["run", "bike", "swim", "fuerza"].includes(a.dep));
   const esHoy = fecha === hoy();
   const ses = d.ses.length ? d.ses.map(s => htmlSesion(s, ed, op)).join("") :
     `<div class="ses descanso"><div class="ses-cab"><h4>😴 Descanso</h4></div><div class="nota">Recuperar también es entrenar: dormir bien, hidratarse y, si apetece, un paseo suave.</div></div>`;
   return `<article class="dia${esHoy ? " hoy" : ""}" id="dia-${i}">
     <div class="dia-cab"><h3>${DIAS[i]} <span class="fecha">${fechaCorta(fecha)}</span>${esHoy ? ' <span class="badge-hoy">Hoy</span>' : ""}</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
     ${ses}
+    ${hechas.length ? `<div class="reloj">${hechas.map(a => `<div>⌚ <b>Hecho:</b> ${ICO[a.dep] || ""} ${htmlDatosAct(a)}</div>`).join("")}</div>` : ""}
     ${ed ? `<button class="btn add mini" data-acc="add-ses" data-dia="${i}">＋ Añadir sesión</button>` : ""}
   </article>`;
 }
@@ -170,7 +200,10 @@ export function htmlProgreso(series) {
   if (!series || !series.length) return `<div class="panel vacio"><p>Todavía no hay semanas para mostrar el progreso.</p></div>`;
   const conDatos = series.filter(s => s.planMin || s.hechoMin || s.km);
   const tot = k => series.reduce((t, s) => t + (s[k] || 0), 0);
-  const cumpl = tot("sesPlan") ? Math.round(tot("sesHechas") / tot("sesPlan") * 100) : null;
+  // cumplimiento: solo semanas con plan, y sin pasar del 100 % en cada una
+  const conPlan = series.filter(s => s.sesPlan > 0);
+  const planT = conPlan.reduce((t, s) => t + s.sesPlan, 0);
+  const cumpl = planT ? Math.round(conPlan.reduce((t, s) => t + Math.min(s.sesHechas, s.sesPlan), 0) / planT * 100) : null;
   const h = m => (Math.round(m / 6) / 10).toString().replace(".", ",") + " h";
   return `<article class="dia progreso">
     <div class="dia-cab"><h3>Progreso</h3><span class="muted small">últimas ${series.length} semanas</span></div>

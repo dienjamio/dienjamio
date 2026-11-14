@@ -21,6 +21,12 @@ service cloud.firestore {
       allow update, delete: if esEntrenador() && resource.data.owner == request.auth.uid;
       // Buzón del deportista: entrenos hechos, valoraciones y carreras propuestas.
       // Solo existe si existe su enlace; las fotos no pueden pasar de ~900 KB.
+      // Fotos de los entrenos (cada una por separado, hasta ~900 KB)
+      match /fotos/{id} {
+        allow read, delete: if exists(/databases/$(database)/documents/publico/$(token));
+        allow create: if exists(/databases/$(database)/documents/publico/$(token))
+          && request.resource.data.img is string && request.resource.data.img.size() < 900000;
+      }
       match /aportes/{id} {
         allow read, delete: if exists(/databases/$(database)/documents/publico/$(token));
         allow create, update: if exists(/databases/$(database)/documents/publico/$(token))

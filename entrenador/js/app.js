@@ -1,12 +1,12 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141816";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141816";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio } from "./vista.js?v=202611141816";
-import { BIBLIO } from "./biblioteca.js?v=202611141816";
-import { leerTrack, prevision } from "./carrera.js?v=202611141816";
-import { calcProgreso } from "./progreso.js?v=202611141816";
-import * as A from "./almacen.js?v=202611141816";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141816";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141819";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141819";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades } from "./vista.js?v=202611141819";
+import { BIBLIO } from "./biblioteca.js?v=202611141819";
+import { leerTrack, prevision } from "./carrera.js?v=202611141819";
+import { calcProgreso } from "./progreso.js?v=202611141819";
+import * as A from "./almacen.js?v=202611141819";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141819";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -324,6 +324,8 @@ async function publicar(a) {
         track: c.track ? { dist: c.track.dist, sube: c.track.sube, baja: c.track.baja, kms: c.track.kms, perfil: c.track.perfil } : null, prev: prevision(c, Z) })),
       progreso,
       videos: ajustes.videos || {},
+      actividades: (a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep))
+        .map(({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente }) => ({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente })),
       zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo },
       semanas
     });
@@ -347,6 +349,9 @@ async function abrir(id, mantener = false) {
   if (A.nube) { try { a._aportes = await A.listarAportes(a.token); } catch (e) { a._aportes = a._aportes || []; } }
   actual = a;
   if (!mantener) { sub = "semana"; lunesVista = lunesDe(hoy()); }
+  // las actividades que el deportista sube al registrar entrenos pasan a su historial
+  const suyas = (a._aportes || []).filter(x => x.tipo === "sesion" && x.act?.fecha).map(x => ({ ...x.act, id: "dep-" + x.id }));
+  if (suyas.length) { const { lista, anadidas } = fusionar(a.actividades || [], suyas); if (anadidas) { a.actividades = lista.slice(0, 1500); await A.guardarFicha(a); } }
   // datos recalculados con los filtros actuales y semanas futuras al día con el generador nuevo
   if (a.actividades?.length || a.medidas?.length) recalcHist(a);
   let rehechas = 0;
@@ -408,11 +413,12 @@ function pintarAtleta() {
     const regs = {};
     (a._aportes || []).filter(x => x.tipo === "sesion" && x.lunes === lunesVista).forEach(x => { regs[x.sesId] = x; });
     el.innerHTML = sub === "semana"
-      ? htmlValoracion(a, lunesVista) + htmlCabSemana(snap) + snap.dias.map((_, i) => htmlDia(snap, i, true, { regs })).join("")
+      ? htmlValoracion(a, lunesVista) + htmlCabSemana(snap) + snap.dias.map((_, i) => htmlDia(snap, i, true, { regs, acts: a.actividades || [] })).join("")
       : snap.dias.map((_, i) => htmlMenuDia(snap, i, true)).join("") + `<p class="aviso">Menú orientativo calculado según la carga de cada día. No sustituye a un dietista-nutricionista.</p>`;
   } else if (sub === "carreras") pintarCarreras();
   else if (sub === "plan") pintarPlan();
-  else if (sub === "progreso") el.innerHTML = htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }));
+  else if (sub === "progreso") el.innerHTML = htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }))
+    + (htmlActividades((a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep)), "Sus actividades (12 semanas)") || `<p class="muted small">Sin actividades: súbelas en «Datos» o pídele que suba el archivo de su reloj al registrar cada entreno.</p>`);
   else if (sub === "datos") pintarDatos();
   else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>${htmlFuentes(a)}`;
 }
@@ -980,6 +986,11 @@ function enlazar() {
       try { await A.marcarAporte(a.token, x.id, { estado: x.estado, visto: true }); } catch (e) { }
       const r = acc === "aceptar-carrera" ? await actualizarFuturas(a) : "Carrera descartada";
       await publicar(a); toast(r); pintarLista(); return pintarAtleta();
+    }
+    if (acc === "ver-foto") {
+      const img = await A.leerFoto(a.token, t.dataset.f).catch(() => null) || t.querySelector("img")?.src;
+      const w = window.open(); if (w && img) w.document.write(`<title>Captura</title><body style="margin:0;background:#000"><img src="${img}" style="max-width:100%;display:block;margin:auto">`);
+      return;
     }
     if (acc === "ver-img") { const src = t.querySelector("img")?.src; const w = window.open(); if (w && src) w.document.write(`<title>Captura</title><img src="${src}" style="max-width:100%">`); return; }
     if (acc === "nueva-carrera") return abrirCarrera(null);
