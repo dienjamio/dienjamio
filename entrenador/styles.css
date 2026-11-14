@@ -431,3 +431,32 @@ dialog.hoja.ancha{width:min(760px,calc(100% - 16px))}
 .barra-p i{display:block;height:8px;border-radius:4px;background:var(--run)}
 svg.graf-act,svg.mapa-act{width:100%;height:auto;background:var(--paper);border-radius:10px;margin-top:6px}
 #dlg-act .kpis{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+
+/* v9 · Estructura de la sesión (barras) + Calle / Cinta */
+.estr{margin:8px 0 6px}
+.barras{display:flex;align-items:flex-end;gap:2px;height:46px;padding:4px;background:var(--paper);border-radius:8px}
+.barras i{display:block;min-width:3px;border-radius:3px 3px 1px 1px;background:var(--ink3)}
+.barras .n0{background:#4A4C48}.barras .n1{background:#3D8BFF}.barras .n2{background:var(--baja)}
+.barras .n3{background:var(--media)}.barras .n4{background:var(--run)}.barras .n5{background:var(--crit)}
+.corto{margin-top:6px}
+.corto p{margin:4px 0 0;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.35}
+.corto p small{font-weight:400}
+.modos{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.modos button{border:0;background:transparent;color:var(--ink2);font:inherit;font-size:12.5px;padding:4px 10px;cursor:pointer}
+body:not(.cinta) .m-calle,body.cinta .m-cinta{background:var(--accent);color:var(--accent-ink);font-weight:700}
+body.cinta .c-calle,body:not(.cinta) .c-cinta{display:none}
+.ritmos-t td:nth-child(2),.ritmos-t td:nth-child(3){font-variant-numeric:tabular-nums;font-weight:700}
+
+/* v9 · Tarjeta dorsal de hoy */
+.dorsal{--c:var(--run);position:relative;margin:4px 0 14px;padding:16px 18px 14px;border-radius:18px;background:var(--card);border:2px solid var(--c);overflow:hidden}
+.dorsal::before,.dorsal::after{content:"";position:absolute;top:10px;width:9px;height:9px;border-radius:50%;background:var(--bg);border:1px solid var(--line)}
+.dorsal::before{left:10px}.dorsal::after{right:10px}
+.dorsal.cal{--c:var(--crit)}.dorsal.cue{--c:var(--media)}.dorsal.rod{--c:var(--baja)}.dorsal.tir{--c:var(--swim)}
+.dorsal.fue{--c:var(--fuerza)}.dorsal.bic{--c:var(--bike)}.dorsal.nat{--c:var(--swim)}.dorsal.car{--c:var(--carrera)}
+.dorsal.des{--c:var(--descanso)}.dorsal.mov{--c:var(--movilidad)}
+.dor-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 14px;color:var(--ink2);font-size:13px}
+.dor-cab span:last-child::first-letter{text-transform:uppercase}
+.dor-cat{background:var(--c);color:#0B0B0B;font-weight:900;text-transform:uppercase;letter-spacing:.08em;font-size:12px;padding:3px 9px;border-radius:6px}
+.dor-t{margin:12px 0 6px;font-size:28px;line-height:1.1;font-weight:900;text-transform:uppercase;letter-spacing:.01em}
+.dor-c{font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+.dor-pie{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);color:var(--ink2);font-size:13px}

@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141838";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141851";
 
 /* =========================================================
    Catálogos
@@ -99,6 +99,24 @@ function volumenHistorial(a, lunes) {
 }
 
 /* =========================================================
+   VDOT de Jack Daniels: de una marca a todos los ritmos de entreno
+   ========================================================= */
+const vo2De = v => -4.60 + 0.182258 * v + 0.000104 * v * v;                       // v en m/min
+const fraccion = t => 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t); // t en min
+export const vdotDe = (metros, seg) => { const t = seg / 60; return vo2De(metros / t) / fraccion(t); };
+const velDeVo2 = x => { const a = 0.000104, b = 0.182258, c = -4.60 - x; return (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a); };
+/** Ritmo (s/km) al porcentaje dado del VDOT. */
+export const ritmoVdot = (vdot, pct) => 60000 / velDeVo2(vdot * pct);
+/** Tiempo (s) previsto para una distancia con ese VDOT. */
+export function tiempoVdot(vdot, metros) {
+  let lo = metros / 400 * 60, hi = metros / 50 * 60; // entre 24 km/h y 3 km/h
+  for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (vdotDe(metros, mid) > vdot) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
+export const NOMBRE_RITMO = { recuperacion: "Recuperación", rodaje: "Rodaje", tirada: "Tirada larga", maraton: "Ritmo maratón", media: "Ritmo media", umbral: "Umbral", "10k": "Ritmo 10K", "5k": "Ritmo 5K", series: "Series (VO2máx)" };
+export const ZONA_RITMO = { recuperacion: 1, rodaje: 2, tirada: 2, maraton: 3, media: 3, umbral: 4, "10k": 4, "5k": 5, series: 5 };
+
+/* =========================================================
    Zonas
    ========================================================= */
 export function calcZonas(a) {
@@ -136,15 +154,30 @@ export function calcZonas(a) {
     const e5 = base[a.sexo === "m" ? 1 : 0] * (1 + 0.006 * Math.max(0, (+a.edad || 35) - 35));
     t10 = e5 * Math.pow(2, 1.06); ritmoEstimado = true;
   }
+  let tipos = null, vdot = null;
   if (t10) {
-    const p = t10 / 10;
-    // cada zona: lo que dé menos diferencia con el ritmo de 10 km entre un % y unos segundos fijos (así sale realista
-    // tanto para un corredor rápido como para alguien que empieza)
-    const MUL = [[1.38, 1.26], [1.26, 1.15], [1.15, 1.06], [1.06, 0.99], [0.99, 0.93]], ADD = [[110, 70], [80, 40], [42, 18], [18, -3], [-3, -20]];
-    const cerca = (m, add) => { const om = p * (m - 1); return Math.abs(om) < Math.abs(add) ? om : add; };
-    ritmos = MUL.map(([lento, rapido], i) => [p + cerca(rapido, ADD[i][1]), p + cerca(lento, ADD[i][0])]);
-    const e5 = t5 || t10 / Math.pow(2, 1.06), e21 = t21 || t10 * Math.pow(2.10975, 1.06), e42 = t42 || t10 * Math.pow(4.2195, 1.08);
-    carrera = { "5k": { p: e5 / 5, t: e5 }, "10k": { p: t10 / 10, t: t10 }, media: { p: e21 / 21.0975, t: e21 }, maraton: { p: e42 / 42.195, t: e42 } };
+    // VDOT (Jack Daniels) a partir de su mejor marca real; si no hay, del 5 km estimado
+    const base = t10 && parseTiempo(m["10k"]) ? [10000, t10] : t5 ? [5000, t5] : t21 ? [21097.5, t21] : t42 ? [42195, t42] : [10000, t10];
+    vdot = vdotDe(base[0], base[1]);
+    const r = pct => ritmoVdot(vdot, pct);
+    const pred = d => tiempoVdot(vdot, d);
+    const e5 = t5 || pred(5000), e10 = parseTiempo(m["10k"]) || pred(10000), e21 = t21 || pred(21097.5), e42 = t42 || pred(42195) * 1.03; // el maratón real suele salir algo más lento
+    carrera = { "5k": { p: e5 / 5, t: e5 }, "10k": { p: e10 / 10, t: e10 }, media: { p: e21 / 21.0975, t: e21 }, maraton: { p: e42 / 42.195, t: e42 } };
+    // ritmos con nombre (s/km, [rápido, lento])
+    const rango = (p, a, b) => [Math.round(p - a), Math.round(p + b)];
+    tipos = {
+      recuperacion: [Math.round(r(0.62)), Math.round(r(0.57))],
+      rodaje: [Math.round(r(0.68)), Math.round(r(0.63))],
+      tirada: [Math.round(r(0.66)), Math.round(r(0.62))],
+      maraton: rango(carrera.maraton.p, 4, 4),
+      media: rango(carrera.media.p, 4, 4),
+      umbral: rango(r(0.88), 4, 4),
+      "10k": rango(carrera["10k"].p, 3, 3),
+      "5k": rango(carrera["5k"].p, 3, 3),
+      series: rango(r(0.975), 4, 4)
+    };
+    // zonas de ritmo coherentes con los ritmos con nombre
+    ritmos = [tipos.recuperacion, tipos.rodaje, [tipos.maraton[0] - 6, tipos.maraton[1] + 8], [tipos.umbral[0] - 2, tipos.umbral[1] + 4], [tipos.series[0] - 4, tipos.series[1]]];
   }
   let potencia = null;
   if (+a.ftp) potencia = [[0, 0.55], [0.56, 0.75], [0.76, 0.90], [0.91, 1.05], [1.06, 1.20]].map(([lo, hi]) => [Math.round(a.ftp * lo), Math.round(a.ftp * hi)]);
@@ -157,8 +190,10 @@ export function calcZonas(a) {
   if (Array.isArray(rz) && rz.length === 5 && rz.every(z => z && parseTiempo(z[0]) && parseTiempo(z[1]))) {
     ritmos = rz.map(z => { const x = parseTiempo(z[0]), y = parseTiempo(z[1]); return [Math.min(x, y), Math.max(x, y)]; });
     ritmosPropios = true; ritmoEstimado = false;
+    const R = ritmos;
+    tipos = { recuperacion: R[0], rodaje: R[1], tirada: R[1], maraton: R[2], media: R[2], umbral: R[3], "10k": R[3], "5k": R[4], series: R[4] };
   }
-  return { fcmax, fcmaxEst, fcrep, umbral, fc: zonasFC, metodo, ritmos, carrera: ritmoEstimado ? null : carrera, potencia, nado, ritmoEstimado, ritmosPropios };
+  return { fcmax, fcmaxEst, fcrep, umbral, fc: zonasFC, metodo, ritmos, carrera: ritmoEstimado ? null : carrera, potencia, nado, ritmoEstimado, ritmosPropios, tipos, vdot: vdot ? Math.round(vdot * 10) / 10 : null };
 }
 
 export const ZNOM = ["Z1 · Recuperación", "Z2 · Aeróbico suave", "Z3 · Tempo", "Z4 · Umbral", "Z5 · VO2máx"];
@@ -398,8 +433,35 @@ function colocar(a, T, F, ctx) {
     if (!fijos.includes(ant)) semana[ant] = semana[ant].filter(x => x.dep !== "fuerza").map(x => esDura(x) ? S(x.dep === "carrera" ? "run" : x.dep, "activacion") : x);
     if (!fijos.includes(sig) && d !== 6) semana[sig] = semana[sig].filter(x => x.dep !== "fuerza").map(x => esDura(x) ? S(x.dep, "recuperacion") : x);
   }
+  maxSeguidos(a, semana, train, fijos);
   semana.forEach(dia => dia.sort((x, y) => (x.dep === "fuerza") - (y.dep === "fuerza")));
   return semana;
+}
+
+/** Como mucho 3 días seguidos corriendo (4 para avanzados): mueve o cambia un rodaje suave. */
+function maxSeguidos(a, semana, train, fijos) {
+  const lim = a.nivel === "avanzado" ? 4 : 3;
+  const corre = d => semana[d].some(x => x.dep === "run");
+  const racha = () => { let n = 0, ini = 0; for (let d = 0; d < 7; d++) { if (corre(d)) { n++; if (n > lim) return [ini, d]; } else { n = 0; ini = d + 1; } } return null; };
+  const facil = x => x.dep === "run" && ["suave", "recuperacion"].includes(x.tipo);
+  for (let vuelta = 0; vuelta < 4; vuelta++) {
+    const r = racha(); if (!r) return;
+    const [i0, i1] = r;
+    // candidato: día de la racha con un rodaje suave, mejor en el medio
+    const cand = [];
+    for (let d = i0; d <= i1; d++) if (!fijos.includes(d) && semana[d].some(facil)) cand.push(d);
+    if (!cand.length) return;
+    cand.sort((x, y) => Math.abs(x - (i0 + i1) / 2) - Math.abs(y - (i0 + i1) / 2));
+    const d = cand[0], ses = semana[d].find(facil);
+    semana[d] = semana[d].filter(x => x !== ses);
+    // ¿hay un día disponible sin carrera donde no se forme otra racha?
+    const hueco = train.find(h => h !== d && !fijos.includes(h) && !corre(h) && !semana[h].some(x => x.dep === "fuerza" && semana[h].length > 1) && (() => {
+      semana[h].push(ses); const ok = !racha(); semana[h].pop(); return ok;
+    })());
+    if (hueco !== undefined) { semana[hueco] = semana[hueco].filter(x => x.dep !== "movilidad"); semana[hueco].push(ses); }
+    else if (a.deportes?.bike) semana[d].push({ ...ses, dep: "bike" });
+    if (!semana[d].length) semana[d].push(S("movilidad", "movilidad"));
+  }
 }
 
 /* =========================================================
@@ -532,6 +594,51 @@ function s5(dia, max) {
 }
 
 /* =========================================================
+   Estructura numérica de las sesiones de carrera
+   Cada tramo: { min, k } continuo · { n, min|m, k, rec } repeticiones · k = "andar" o "trote"
+   Devuelve el texto corto en versión calle (min/km) y cinta (km/h) y las barras [min, nivel 0-5]
+   ========================================================= */
+const kmhTxt = r => (3600 / ((r[0] + r[1]) / 2)).toFixed(1).replace(".", ",").replace(",0", "");
+function ritmoTxt(Z, k, modo) {
+  if (k === "andar") return "andando";
+  if (k === "trote") return "trote muy suave";
+  if (k === "cuesta") return "subiendo fuerte";
+  const r = Z.tipos?.[k];
+  if (!r) return ZONA_RITMO[k] ? `Z${ZONA_RITMO[k]}` : "";
+  return modo === "cinta" ? `${kmhTxt(r)} km/h` : `${fmtRitmo(r[0])}-${fmtRitmo(r[1])}`;
+}
+const durTxt = m => m < 1 ? `${Math.round(m * 60)}''` : Number.isInteger(m) ? `${m}'` : minSeg(Math.round(m * 60));
+function minTramo(Z, t) {
+  if (t.min) return t.min;
+  const r = Z.tipos?.[t.k] || [360, 360];
+  return t.m / 1000 * (r[0] + r[1]) / 2 / 60;
+}
+const NIVEL = k => k === "andar" ? 0 : k === "trote" ? 1 : k === "cuesta" ? 5 : ZONA_RITMO[k] || 2;
+function textoTramos(tr, Z, modo) {
+  return tr.map(t => {
+    const r = ritmoTxt(Z, t.k, modo);
+    const a = r === "andando" || r === "subiendo fuerte" || r === "trote muy suave" ? ` ${r}` : r ? ` a ${r}` : "";
+    const una = t.m ? `${t.m >= 1000 && t.m % 1000 === 0 ? t.m / 1000 + " km" : t.m + " m"}${a}` : `${durTxt(t.min)}${a}`;
+    if (!t.n) return una;
+    const rec = t.rec ? ` (rec. ${durTxt(t.rec)}${t.recA ? " andando" : ""})` : "";
+    return `${t.n} × ${t.par ? `(${una} + ${durTxt(t.par.min)} ${ritmoTxt(Z, t.par.k, modo)})` : una}${rec}`;
+  }).join(" + ");
+}
+function barras(tr, Z) {
+  const out = [];
+  for (const t of tr) {
+    const m = minTramo(Z, t), nv = NIVEL(t.k);
+    if (!t.n) { out.push([+m.toFixed(2), nv]); continue; }
+    for (let i = 0; i < t.n; i++) {
+      out.push([+m.toFixed(2), nv]);
+      if (t.par) out.push([t.par.min, NIVEL(t.par.k)]);
+      if (t.rec && i < t.n - 1) out.push([t.rec, t.recA ? 0 : 1]);
+    }
+  }
+  return out;
+}
+
+/* =========================================================
    Contenido de las sesiones
    ========================================================= */
 function describir(s, a, F, Z, ctx) {
@@ -544,6 +651,8 @@ function describir(s, a, F, Z, ctx) {
   const M = Math.max(10, s.min - wu - cd);
   const tipo = s.tipo;
   const reps = (w, lo, hi) => clamp(Math.floor(M / w), lo, hi);
+  let tr = null; // tramos numéricos (solo carrera a pie)
+  const kObj = k => Z.tipos?.[k] ? k : "umbral";
 
   if (tipo === "competicion") {
     const c = s.carrera, p = c.prueba;
@@ -567,70 +676,80 @@ function describir(s, a, F, Z, ctx) {
       out.z = "A tope, pero con ritmo constante";
       out.p = [`Calentamiento ${wu}' suave + movilidad + 3 progresivos de 20''`, "5 km a tope, lo más constante posible (sal un poco por debajo de tu ritmo y acelera al final)", "Vuelta a la calma 10' muy suave"];
       out.n = "Registra el tiempo exacto (o sube el archivo del reloj): con él se recalculan todos tus ritmos de entreno.";
+      tr = [{ min: wu, k: "rodaje" }, { m: 5000, k: "5k" }, { min: 10, k: "recuperacion" }];
     } else if (tipo === "iniciacion") {
-      const w = Math.min(ctx.semanaNum, INICIACION.length), [tr, an, rp] = INICIACION[w - 1];
+      const w = Math.min(ctx.semanaNum, INICIACION.length), [tro, an, rp] = INICIACION[w - 1];
       const ritmo = Z.ritmos ? `${fmtRitmo(Z.ritmos[1][0])}-${fmtRitmo(Z.ritmos[0][1])} /km` : "";
-      out.t = rp > 1 ? `Correr y andar · ${rp} × (${minSeg(tr)} + ${minSeg(an)})` : `Correr ${minSeg(tr)} seguidos`;
+      out.t = rp > 1 ? `Correr y andar · ${rp} × (${minSeg(tro)} + ${minSeg(an)})` : `Correr ${minSeg(tro)} seguidos`;
       out.z = `Trote muy suave${ritmo ? " a " + ritmo : ""} (${Z.fc[0][0]}-${Z.fc[1][1]} ppm)`;
       out.p = ["5' andando a buen paso para calentar",
-        rp > 1 ? `${rp} × (${minSeg(tr)} trotando muy suave + ${minSeg(an)} andando)` : `${minSeg(tr)} trotando muy suave, sin parar`,
+        rp > 1 ? `${rp} × (${minSeg(tro)} trotando muy suave + ${minSeg(an)} andando)` : `${minSeg(tro)} trotando muy suave, sin parar`,
         "5' andando para terminar + estiramientos suaves de gemelo y cuádriceps"];
+      tr = [{ min: 5, k: "andar" }, rp > 1 ? { n: rp, min: tro / 60, k: "trote", par: an ? { min: an / 60, k: "andar" } : null } : { min: tro / 60, k: "trote" }, { min: 5, k: "andar" }];
       out.n = `Semana ${w} de ${INICIACION.length} de la iniciación. Trota tan suave que puedas hablar sin ahogarte. Si una semana se te hace dura, repítela antes de pasar a la siguiente.`;
     } else if (tipo === "readapt") {
       const w = Math.min(ctx.semanaNum, 8);
       out.t = "Vuelta a correr"; out.z = z(2);
       const blq = w <= 6 ? `${PASOS_LESION[w - 1][2]} × (${PASOS_LESION[w - 1][0]}' corriendo en Z2 + ${PASOS_LESION[w - 1][1]}' andando)` : w === 7 ? "25' de carrera continua en Z2" : "35' de carrera continua en Z2";
       out.p = ["5' andando rápido + movilidad de tobillo y cadera", blq, "5' andando + estiramientos suaves"];
+      tr = [{ min: 5, k: "andar" }, w <= 6 ? { n: PASOS_LESION[w - 1][2], min: PASOS_LESION[w - 1][0], k: "rodaje", par: { min: PASOS_LESION[w - 1][1], k: "andar" } } : { min: w === 7 ? 25 : 35, k: "rodaje" }, { min: 5, k: "andar" }];
       out.n = "Regla del dolor: hasta 3/10 durante, vale. Si al día siguiente duele más que antes, repite la semana anterior.";
       if (a.lesionZona) out.n += ` Zona a vigilar: ${a.lesionZona}.`;
     } else if (tipo === "largo") {
       out.t = "Tirada larga"; out.z = z(2);
       let main = `Carrera continua ${fmtMin(s.min)} en ${z(2)}`;
-      if (fk === "construccion") main = `${fmtMin(s.min - 15)} en Z2 y los últimos 15' en ${z(3)}`;
+      tr = [{ min: s.min, k: "tirada" }];
+      if (fk === "construccion") { main = `${fmtMin(s.min - 15)} en Z2 y los últimos 15' en ${z(3)}`; tr = [{ min: s.min - 15, k: "tirada" }, { min: 15, k: obj === "media" || obj === "10k" || obj === "5k" ? "media" : "maraton" }]; }
       if (fk === "especifico") {
-        if (obj === "maraton") main = `${fmtMin(s.min - 50)} en Z2 + 2 × 20' a ritmo maratón${ritmoCarrera(Z, "maraton")} con 5' suaves entre bloques`;
-        else if (obj === "media") main = `${fmtMin(s.min - 25)} en Z2 y los últimos 25' a ritmo de media maratón${ritmoCarrera(Z, "media")}`;
-        else if (RUN_GOALS.includes(obj)) main = `${fmtMin(s.min - 5)} en Z2 + 6 × 20'' rectas rápidas al final`;
+        if (obj === "maraton") { main = `${fmtMin(s.min - 50)} en Z2 + 2 × 20' a ritmo maratón${ritmoCarrera(Z, "maraton")} con 5' suaves entre bloques`; tr = [{ min: s.min - 45, k: "tirada" }, { n: 2, min: 20, k: "maraton", rec: 5 }]; }
+        else if (obj === "media") { main = `${fmtMin(s.min - 25)} en Z2 y los últimos 25' a ritmo de media maratón${ritmoCarrera(Z, "media")}`; tr = [{ min: s.min - 25, k: "tirada" }, { min: 25, k: "media" }]; }
+        else if (RUN_GOALS.includes(obj)) { main = `${fmtMin(s.min - 5)} en Z2 + 6 × 20'' rectas rápidas al final`; tr = [{ min: s.min - 5, k: "tirada" }, { n: 6, min: 1 / 3, k: "5k", rec: 0.5 }]; }
       }
       out.p = [main, "5-10' de estiramientos suaves al terminar"];
       if (s.min >= 75) out.n = "Lleva agua. A partir de 75' toma 30-60 g de hidratos por hora (gel, dátiles, bebida isotónica).";
     } else if (tipo === "calidad") {
       out.t = "Series";
       let main;
-      if (s.hiit) { main = `HIIT: ${reps(2, 6, 10)} × (30'' fuerte en ${z(5)} / 90'' suave)`; out.t = "HIIT corto"; }
+      let q; // bloque principal en tramos
+      if (s.hiit) { const n = reps(2, 6, 10); main = `HIIT: ${n} × (30'' fuerte en ${z(5)} / 90'' suave)`; out.t = "HIIT corto"; q = { n, min: 0.5, k: "series", rec: 1.5 }; }
       else if (general || fk === "base") {
-        if (s.q === 1 && ini) { main = `Fartlek suave: ${reps(3, 4, 8)} × (1' alegre en ${z(3)} / 2' trote suave)`; out.t = "Fartlek suave"; }
-        else if (s.q === 1) { main = `Fartlek: ${reps(2, 5, 12)} × (1' en ${z(4)} / 1' trote en Z1)`; out.t = "Fartlek"; }
-        else { main = `Cuestas: ${reps(2.5, 5, 10)} × 30-45'' subiendo fuerte (${z(5)}), bajada trotando`; out.t = "Cuestas"; }
+        if (s.q === 1 && ini) { const n = reps(3, 4, 8); main = `Fartlek suave: ${n} × (1' alegre en ${z(3)} / 2' trote suave)`; out.t = "Fartlek suave"; q = { n, min: 1, k: "maraton", rec: 2 }; }
+        else if (s.q === 1) { const n = reps(2, 5, 12); main = `Fartlek: ${n} × (1' en ${z(4)} / 1' trote en Z1)`; out.t = "Fartlek"; q = { n, min: 1, k: "10k", rec: 1 }; }
+        else { const n = reps(2.5, 5, 10); main = `Cuestas: ${n} × 30-45'' subiendo fuerte (${z(5)}), bajada trotando`; out.t = "Cuestas"; q = { n, min: 0.67, k: "cuesta", rec: 1.5 }; }
       } else if (fk === "construccion") {
-        if (s.q === 1) { const b = M >= 35 ? 10 : 8; main = `Umbral: ${reps(b + 2, 2, a.nivel === "avanzado" ? 4 : 3)} × ${b}' en ${z(4)}, recuperando 2' al trote`; out.t = "Umbral"; }
-        else { main = `VO2máx: ${reps(5, 4, 7)} × 3' en ${z(5)}, recuperando 2' al trote`; out.t = "Series VO2máx"; }
+        if (s.q === 1) { const b = M >= 35 ? 10 : 8, n = reps(b + 2, 2, a.nivel === "avanzado" ? 4 : 3); main = `Umbral: ${n} × ${b}' en ${z(4)}, recuperando 2' al trote`; out.t = "Umbral"; q = { n, min: b, k: "umbral", rec: 2 }; }
+        else { const n = reps(5, 4, 7); main = `VO2máx: ${n} × 3' en ${z(5)}, recuperando 2' al trote`; out.t = "Series VO2máx"; q = { n, min: 3, k: "series", rec: 2 }; }
       } else if (fk === "especifico") {
         if (s.q === 1) {
           out.t = "Ritmo de competición";
-          main = ({
-            maraton: `${reps(18, 2, 3)} × 15' a ritmo maratón${ritmoCarrera(Z, "maraton")}, 3' suaves entre bloques`,
-            media: `${reps(14, 2, 4)} × 12' a ritmo media maratón${ritmoCarrera(Z, "media")}, 2' trote`,
-            "10k": `${reps(6.5, 4, 7)} × 1000 m a ritmo 10 km${ritmoCarrera(Z, "10k")}, 90'' trote`,
-            "5k": `${reps(5.5, 4, 8)} × 800 m a ritmo 5 km${ritmoCarrera(Z, "5k")}, 2' trote`,
-            triatlon: `${reps(8, 3, 6)} × 5' a ritmo de carrera de triatlón (${z(4)}), 2' trote`
-          })[obj] || `${reps(12, 2, 4)} × 10' en ${z(4)}, 2' trote`;
-        } else { main = `Umbral: ${reps(12, 2, 4)} × 10' en ${z(4)}, 2' trote`; out.t = "Umbral"; }
-      } else { main = `2 × 8' a ritmo de carrera${ritmoCarrera(Z, obj)}, 3' trote + 4 × 20'' progresivos`; out.t = "Toque de ritmo"; }
+          const E = {
+            maraton: [reps(18, 2, 3), n => `${n} × 15' a ritmo maratón${ritmoCarrera(Z, "maraton")}, 3' suaves entre bloques`, { min: 15, k: "maraton", rec: 3 }],
+            media: [reps(14, 2, 4), n => `${n} × 12' a ritmo media maratón${ritmoCarrera(Z, "media")}, 2' trote`, { min: 12, k: "media", rec: 2 }],
+            "10k": [reps(6.5, 4, 7), n => `${n} × 1000 m a ritmo 10 km${ritmoCarrera(Z, "10k")}, 90'' trote`, { m: 1000, k: "10k", rec: 1.5 }],
+            "5k": [reps(5.5, 4, 8), n => `${n} × 800 m a ritmo 5 km${ritmoCarrera(Z, "5k")}, 2' trote`, { m: 800, k: "5k", rec: 2 }],
+            triatlon: [reps(8, 3, 6), n => `${n} × 5' a ritmo de carrera de triatlón (${z(4)}), 2' trote`, { min: 5, k: "umbral", rec: 2 }]
+          }[obj] || [reps(12, 2, 4), n => `${n} × 10' en ${z(4)}, 2' trote`, { min: 10, k: "umbral", rec: 2 }];
+          main = E[1](E[0]); q = { n: E[0], ...E[2] };
+        } else { const n = reps(12, 2, 4); main = `Umbral: ${n} × 10' en ${z(4)}, 2' trote`; out.t = "Umbral"; q = { n, min: 10, k: "umbral", rec: 2 }; }
+      } else { main = `2 × 8' a ritmo de carrera${ritmoCarrera(Z, obj)}, 3' trote + 4 × 20'' progresivos`; out.t = "Toque de ritmo"; q = { n: 2, min: 8, k: kObj(obj), rec: 3 }; }
+      tr = [{ min: wu, k: "rodaje" }, q, { min: cd, k: "recuperacion" }];
       out.z = main.includes("Z5") ? "Z4-Z5" : "Z3-Z4";
       out.p = [`Calentamiento ${wu}' en Z1-Z2 + movilidad dinámica + 3 progresivos`, main, `Vuelta a la calma ${cd}' en Z1`];
     } else if (tipo === "suave") {
       out.t = "Rodaje suave"; out.z = z(2);
       out.p = [`Rodaje continuo ${fmtMin(s.min)} en ${z(2)}`];
+      tr = [{ min: s.min, k: "rodaje" }];
       if (s.rectas) out.p.push("Al final: 4-6 rectas de 20'' rápidas y relajadas (técnica)");
       if (ini) out.n = "Ritmo de conversación: si te cuesta hablar, ve más despacio o camina 1' y sigue.";
     } else if (tipo === "recuperacion") {
       out.t = "Rodaje regenerativo"; out.z = z(1);
       out.p = [`Trote muy suave ${fmtMin(s.min)} en ${z(1)}`, "10' de movilidad de cadera y tobillo"];
+      tr = [{ min: s.min, k: "recuperacion" }];
     } else if (tipo === "activacion") {
       out.t = "Activación precompetición"; out.z = "Z2 + toques";
       out.p = [`${fmtMin(Math.max(15, s.min - 5))} suave en Z2`, `4 × 20'' a ritmo de carrera${ritmoCarrera(Z, obj)}, 1' suave entre ellos`];
       out.n = "Revisa material y dorsal. Cena rica en hidratos.";
+      tr = [{ min: Math.max(15, s.min - 5), k: "rodaje" }, { n: 4, min: 1 / 3, k: kObj(obj), rec: 1 }];
     }
   } else if (s.dep === "bike") {
     if (tipo === "largo") {
@@ -695,6 +814,11 @@ function describir(s, a, F, Z, ctx) {
     out.t = "Movilidad y core"; out.z = "Suave";
     out.p = ["Movilidad de cadera, tobillo y columna torácica (10')", "Core: 3 × (plancha 30'' + dead bug 10 + plancha lateral 20''/lado)", "Estiramientos o yoga suave (10')"];
     out.n = "Día opcional: si hay cansancio, mejor descanso total.";
+  }
+  if (tr && s.dep === "run") {
+    tr = tr.filter(t => t && (t.n || t.min > 0 || t.m));
+    out.c = Z.tipos ? { calle: textoTramos(tr, Z, "calle"), cinta: textoTramos(tr, Z, "cinta") } : null;
+    out.est = barras(tr, Z);
   }
   if (s.doble) out.n = (out.n ? out.n + " " : "") + "Segunda sesión del día: sepárala 4-6 h de la primera si puedes.";
   if (s.dep === "run" && Z.ritmoEstimado && tipo !== "competicion") out.n = (out.n ? out.n + " " : "") + "Ritmos estimados: guíate sobre todo por las sensaciones y el pulso.";
@@ -870,7 +994,7 @@ export function menuDia(a, ses, carga, cargaSig, semilla) {
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
 /** Versión del generador: si cambia, las semanas futuras sin cambios a mano se rehacen solas. */
-export const MOTOR_V = 4;
+export const MOTOR_V = 5;
 export function generarSemana(a, lunes) {
   a = efectivo(a);
   const ctx = contexto(a, lunes);
@@ -883,8 +1007,9 @@ export function generarSemana(a, lunes) {
     ses: dia.map(s => {
       const d = describir(s, a, F, Z, ctx);
       const zo = s.dep === "run" ? { suave: 2, largo: 2, recuperacion: 1 }[s.tipo] : null;
-      const obj = zo ? { zona: zo, ritmo: Z.ritmos ? Z.ritmos[zo - 1].map(Math.round) : null, fc: Z.fc[zo - 1] } : null;
-      return { id: uid(8), dep: s.dep, tipo: s.tipo, min: s.min, t: d.t, z: d.z, p: d.p, n: d.n || "", ej: d.ej || null, carrera: s.carrera || null, obj };
+      const rk = { suave: "rodaje", largo: "tirada", recuperacion: "recuperacion" }[s.tipo];
+      const obj = zo ? { zona: zo, ritmo: Z.tipos?.[rk] ? Z.tipos[rk].slice() : Z.ritmos ? Z.ritmos[zo - 1].map(Math.round) : null, fc: Z.fc[zo - 1] } : null;
+      return { id: uid(8), dep: s.dep, tipo: s.tipo, min: s.min, t: d.t, z: d.z, p: d.p, n: d.n || "", ej: d.ej || null, carrera: s.carrera || null, obj, c: d.c || null, est: d.est || null };
     })
   }));
   const fase = FASES[F.clave];

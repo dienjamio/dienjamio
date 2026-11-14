@@ -1,11 +1,11 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141838";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141838";
-import { leerArchivo, fusionar } from "./importar.js?v=202611141838";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141838";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141838";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141838";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141851";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141851";
+import { leerArchivo, fusionar } from "./importar.js?v=202611141851";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141851";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141851";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141851";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -71,7 +71,7 @@ function pintar() {
     if (!sh) html += `<div class="panel vacio"><p>Tu entrenador todavía no ha preparado esta semana.</p></div>`;
     else {
       const i = diaSemana(h), d = sh.dias[i], regs = regsDe(l0);
-      html += `<h2 class="hoy-t">${fechaLarga(h)}</h2>`;
+      html += htmlDorsal(d, h, prox);
       html += `<article class="dia hoy"><div class="dia-cab"><h3>Entreno</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
         ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true })).join("") + actividades().filter(a => a.fecha === h).map(a => `<div class="reloj"><button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button></div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
       // entrenos de días anteriores sin registrar
@@ -129,15 +129,46 @@ function descargarCalendario(snap) {
 function logros() {
   const ses = aportes.filter(x => x.tipo === "sesion" && x.hecho !== "no");
   const n = ses.length, km = ses.reduce((t, x) => t + (parseFloat(String(x.km || 0).replace(",", ".")) || 0), 0);
-  const fotos = ses.filter(x => x.img).length, vals = aportes.filter(x => x.tipo === "semana").length;
+  const fotos = ses.filter(x => x.img || x.fotos?.length).length, vals = aportes.filter(x => x.tipo === "semana").length;
   const con = new Set(ses.map(x => x.lunes));
   let racha = 0, l = lunesDe(hoy());
   if (!con.has(l)) l = sumaDias(l, -7);
   while (con.has(l)) { racha++; l = sumaDias(l, -7); }
-  const M = [[n >= 1, "🥇", "Primer entreno"], [n >= 10, "🔟", "10 entrenos"], [n >= 25, "🏅", "25 entrenos"], [n >= 50, "💯", "50 entrenos"],
-    [racha >= 3, "🔥", "3 semanas seguidas"], [racha >= 8, "🚀", "8 semanas seguidas"], [km >= 50, "🛣️", "50 km"], [km >= 200, "🌍", "200 km"],
+  // semanas seguidas con 3 o más entrenos
+  const porSem = {}; ses.forEach(x => { porSem[x.lunes] = (porSem[x.lunes] || 0) + 1; });
+  let r3 = 0; l = lunesDe(hoy()); if (!(porSem[l] >= 3)) l = sumaDias(l, -7);
+  while (porSem[l] >= 3) { r3++; l = sumaDias(l, -7); }
+  // km del año: lo que trae el reloj + lo registrado a mano este año que no venga del reloj
+  const ano = hoy().slice(0, 4);
+  const kmAno = Math.max(P.kmAno || 0, Math.round(actividades().filter(a => a.dep === "run" && a.fecha?.startsWith(ano)).reduce((t, a) => t + (+a.km || 0), 0)));
+  const mk = P.marcas || {}, seg = t => { const p = String(t || "").split(":").map(Number); return p.some(isNaN) || !t ? 0 : p.reduce((x, y) => x * 60 + y, 0); };
+  const bajo = (k, lim) => { const t = seg(mk[k]); return t > 0 && t < lim; };
+  const carreras = Math.max(P.carrerasHechas || 0, (P.carreras || []).filter(c => c.fecha < hoy()).length);
+  const M = [[n >= 1, "🥇", "Primer entreno"], [n >= 10, "🔟", "10 entrenos"], [n >= 25, "🏅", "25 entrenos"], [n >= 50, "💯", "50 entrenos"], [n >= 100, "👑", "100 entrenos"],
+    [racha >= 3, "🔥", "3 semanas seguidas"], [racha >= 8, "🚀", "8 semanas seguidas"], [r3 >= 4, "💪", "4 semanas con 3+ entrenos"], [r3 >= 12, "🦾", "12 semanas con 3+ entrenos"],
+    [km >= 50 || kmAno >= 50, "🛣️", "50 km"], [km >= 200 || kmAno >= 200, "🌍", "200 km"], [kmAno >= 500, "🗺️", `500 km en ${ano}`], [kmAno >= 1000, "🌋", `1.000 km en ${ano}`],
+    [carreras >= 1, "🏁", "Primera carrera"], [carreras >= 5, "🎽", "5 carreras"],
+    [bajo("5k", 1800), "⚡", "5K en menos de 30'"], [bajo("5k", 1500), "⚡", "5K en menos de 25'"], [bajo("10k", 3000), "🎯", "10K en menos de 50'"], [bajo("10k", 2700), "🎯", "10K en menos de 45'"],
+    [bajo("media", 7200), "🥈", "Media en menos de 2 h"], [bajo("maraton", 14400), "🏆", "Maratón en menos de 4 h"],
     [vals >= 1, "📝", "Primera valoración"], [fotos >= 1, "📷", "Primera captura"]];
-  return { n, km, racha, M };
+  return { n, km, racha, r3, kmAno, M };
+}
+
+/* Tarjeta tipo dorsal con el entreno principal de hoy */
+const CAT = { calidad: ["Calidad", "cal"], cuestas: ["Cuestas", "cue"], suave: ["Rodaje", "rod"], recuperacion: ["Regenerativo", "rod"], largo: ["Tirada", "tir"], fuerza: ["Fuerza", "fue"], bike: ["Bici", "bic"], swim: ["Natación", "nat"], competicion: ["Carrera", "car"], test: ["Test", "cal"], iniciacion: ["Correr y andar", "rod"], readapt: ["Vuelta a correr", "rod"], activacion: ["Activación", "rod"], movilidad: ["Movilidad", "mov"] };
+function htmlDorsal(d, h, prox) {
+  const ses = d.ses.filter(s => s.dep !== "movilidad");
+  const s = ses.find(x => x.dep !== "fuerza") || ses[0] || d.ses[0];
+  const k = !s ? "descanso" : s.tipo === "competicion" ? "competicion" : s.dep === "fuerza" ? "fuerza" : s.dep === "bike" ? "bike" : s.dep === "swim" ? "swim" : s.dep === "movilidad" ? "movilidad" : /cuesta/i.test(s.t) ? "cuestas" : s.tipo;
+  const [cat, cls] = CAT[k] || (k === "descanso" ? ["Descanso", "des"] : ["Entreno", "rod"]);
+  const total = d.ses.reduce((t, x) => t + (+x.min || 0), 0);
+  const dias = prox ? diasEntre(h, prox.fecha) : null;
+  return `<div class="dorsal ${cls}">
+    <div class="dor-cab"><span class="dor-cat">${cat}</span><span>${fechaLarga(h).replace(/ de \d{4}$/, "")}</span></div>
+    <div class="dor-t">${s ? esc(s.tipo === "competicion" ? s.t.replace(/^🏁\s*/, "") : s.t) : "Hoy toca descansar"}</div>
+    ${s?.c ? `<div class="dor-c"><span class="c-calle">${esc(s.c.calle)}</span><span class="c-cinta">${esc(s.c.cinta)}</span></div>` : s?.z ? `<div class="dor-c">${esc(s.z)}</div>` : ""}
+    <div class="dor-pie">${total ? `<span>⏱️ ${total >= 60 ? Math.floor(total / 60) + " h " + (total % 60 ? total % 60 + "'" : "") : total + "'"}</span>` : "<span>Recuperar también es entrenar</span>"}${ses.length > 1 ? `<span>+ ${ses.slice(1).map(x => esc(x.t)).join(" + ")}</span>` : ""}${prox && dias > 0 ? `<span>🏁 ${dias} día${dias === 1 ? "" : "s"} para ${esc(prox.nombre || PRUEBAS[prox.prueba])}</span>` : ""}</div>
+  </div>`;
 }
 const fmtT = s => { s = Math.round(s); const h = Math.floor(s / 3600), mm = Math.floor(s % 3600 / 60), ss = s % 60; return h ? `${h}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${mm}:${String(ss).padStart(2, "0")}`; };
 

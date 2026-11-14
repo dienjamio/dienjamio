@@ -1,13 +1,13 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141838";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141838";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141838";
-import { BIBLIO } from "./biblioteca.js?v=202611141838";
-import { leerTrack, prevision } from "./carrera.js?v=202611141838";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141838";
-import { calcProgreso } from "./progreso.js?v=202611141838";
-import * as A from "./almacen.js?v=202611141838";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141838";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141851";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141851";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141851";
+import { BIBLIO } from "./biblioteca.js?v=202611141851";
+import { leerTrack, prevision } from "./carrera.js?v=202611141851";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141851";
+import { calcProgreso } from "./progreso.js?v=202611141851";
+import * as A from "./almacen.js?v=202611141851";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141851";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -351,10 +351,13 @@ async function publicar(a) {
       carreras: (a.carreras || []).filter(c => c.fecha >= sumaDias(hoy(), -30)).map(c => ({ id: c.id, nombre: c.nombre, fecha: c.fecha, prueba: c.prueba, prioridad: c.prioridad, objetivo: c.objetivo || "", lugar: c.lugar || "", estrategia: c.estrategia || "", ritmoObjetivo: c.ritmoObjetivo || "",
         track: c.track ? { dist: c.track.dist, sube: c.track.sube, baja: c.track.baja, kms: c.track.kms, perfil: c.track.perfil } : null, prev: prevision(c, Z) })),
       progreso,
+      marcas: a.marcas || {},
+      kmAno: Math.round((a.actividades || []).filter(x => x.dep === "run" && x.fecha >= hoy().slice(0, 4) + "-01-01").reduce((t, x) => t + (+x.km || 0), 0)),
+      carrerasHechas: (a.carreras || []).filter(c => c.fecha < hoy()).length,
       videos: ajustes.videos || {},
       actividades: (a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep))
         .map(({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det }) => ({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det })),
-      zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo },
+      zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo, tipos: Z.tipos, vdot: Z.vdot, ritmoEstimado: Z.ritmoEstimado, ritmosPropios: Z.ritmosPropios },
       semanas
     });
     estadoEnlace(a, true);
@@ -1081,6 +1084,8 @@ async function cerrarSesion(accion) {
       ej: f.elements.ej.value.split("\n").map(x => x.trim()).filter(Boolean).map(x => { const [n, s_] = x.split("|"); return { n: n.trim(), s: (s_ || "").trim() }; }),
       editada: true };
     if (!s.ej.length) s.ej = null;
+    const o = sesEdit.s || {};
+    if (o.dep !== s.dep || o.t !== s.t || o.min !== s.min || (o.p || []).join("\n") !== s.p.join("\n")) { s.c = null; s.est = null; } // la estructura automática ya no vale
     if (s.tipo === "manual") s.tipo = s.dep === "fuerza" ? "fuerza" : s.min >= 90 ? "largo" : "suave";
     const nuevoDia = +f.elements.dia.value;
     if (i >= 0) lista.splice(i, 1);

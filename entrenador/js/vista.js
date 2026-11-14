@@ -1,7 +1,7 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141838";
-import { infoEjercicio } from "./biblioteca.js?v=202611141838";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141838";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141851";
+import { infoEjercicio } from "./biblioteca.js?v=202611141851";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611141851";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -67,6 +67,32 @@ export function htmlActividades(acts, titulo = "Actividades") {
     }).join("")}</article>`;
 }
 
+/* ---------- Calle / cinta ---------- */
+const MODO = "entrenador.modoRitmo";
+const modoCinta = () => { try { return localStorage.getItem(MODO) === "cinta"; } catch (e) { return false; } };
+if (typeof document !== "undefined") {
+  const aplicar = () => document.body && document.body.classList.toggle("cinta", modoCinta());
+  if (document.body) aplicar(); else document.addEventListener("DOMContentLoaded", aplicar);
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-modo]");
+    if (!b) return;
+    try { localStorage.setItem(MODO, b.dataset.modo); } catch (er) { }
+    document.body.classList.toggle("cinta", b.dataset.modo === "cinta");
+  });
+}
+const NIV_TXT = ["andando", "muy suave", "suave", "ritmo", "umbral", "fuerte"];
+export function htmlEstructura(s) {
+  if (!s.est?.length && !s.c) return "";
+  const tot = s.est ? s.est.reduce((t, x) => t + x[0], 0) : 0;
+  const barras = s.est?.length > 1 ? `<div class="barras" role="img" aria-label="Estructura de la sesión">${s.est.map(([m, n]) => `<i class="n${n}" style="flex-grow:${m};height:${18 + n * 14}%" title="${fmtMin(Math.round(m)) || Math.round(m * 60) + "''"} ${NIV_TXT[n]}"></i>`).join("")}</div>` : "";
+  const corto = s.c ? `<div class="corto">
+      <div class="modos"><button type="button" class="m-calle" data-modo="calle">🛣️ Calle</button><button type="button" class="m-cinta" data-modo="cinta">🏃 Cinta</button></div>
+      <p class="c-calle">${esc(s.c.calle)}<small> min/km</small></p>
+      <p class="c-cinta">${esc(s.c.cinta)}<small> · cinta con 1-2 % de inclinación</small></p>
+    </div>` : "";
+  return `<div class="estr">${barras}${corto}</div>`;
+}
+
 export function htmlSesion(s, ed = false, op = {}) {
   const d = DEP[s.dep] || DEP.run;
   const reg = op.regs?.[s.id];
@@ -77,6 +103,7 @@ export function htmlSesion(s, ed = false, op = {}) {
       <span class="dur">${fmtMin(s.min)}</span>
     </div>
     ${s.z ? `<div class="zona">${esc(d.n)} · ${esc(s.z)}</div>` : ""}
+    ${htmlEstructura(s)}
     ${s.p && s.p.length ? `<ol>${s.p.map(p => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
     ${ej}
     ${s.n ? `<div class="nota">${esc(s.n)}</div>` : ""}
@@ -155,7 +182,11 @@ export function htmlZonas(Z) {
   const car = Z.carrera ? `<h3>Ritmos y tiempos estimados</h3><div class="wrap"><table><tr><th>Prueba</th><th>Ritmo</th><th>Tiempo</th></tr>
     ${[["5k", "5 km"], ["10k", "10 km"], ["media", "Media maratón"], ["maraton", "Maratón"]].map(([k, n]) => `<tr><td>${n}</td><td>${fmtRitmo(Z.carrera[k].p)} /km</td><td>${fmtHoras(Z.carrera[k].t)}</td></tr>`).join("")}
     </table></div>` : "";
-  return `<h3>Zonas de entrenamiento</h3>
+  const kmh = r => (3600 / ((r[0] + r[1]) / 2)).toFixed(1).replace(".", ",");
+  const tipos = Z.tipos ? `<h3>Tus ritmos${Z.vdot && !Z.ritmosPropios ? ` <small>(VDOT ${String(Z.vdot).replace(".", ",")}${Z.ritmoEstimado ? ", estimado" : ""})</small>` : ""}</h3><div class="wrap"><table class="ritmos-t"><tr><th>Ritmo</th><th>Calle /km</th><th>Cinta</th><th>Pulso</th></tr>
+    ${Object.entries(Z.tipos).map(([k, r]) => { const zi = ZONA_RITMO[k] - 1; return `<tr><td>${NOMBRE_RITMO[k]}</td><td>${fmtRitmo(r[0])}-${fmtRitmo(r[1])}</td><td>${kmh(r)} km/h</td><td>${Z.fc[zi][0]}-${Z.fc[zi][1]}</td></tr>`; }).join("")}
+    </table></div><small>Cinta: pon un 1-2 % de inclinación para que cueste lo mismo que en la calle. Con calor, viento o cuestas, manda el pulso y la sensación, no el ritmo.</small>` : "";
+  return `${tipos}<h3>Zonas de entrenamiento</h3>
     <div class="wrap"><table><tr><th>Zona</th><th>Pulso</th>${Z.ritmos ? "<th>Ritmo /km</th>" : ""}${Z.potencia ? "<th>Vatios</th>" : ""}${Z.nado ? "<th>Nado /100 m</th>" : ""}<th>Sensación</th></tr>
     ${[0, 1, 2, 3, 4].map(fila).join("")}</table></div>
     <small>Pulso calculado con: ${esc(Z.metodo)}.</small>${car}`;
