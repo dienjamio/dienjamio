@@ -1,5 +1,5 @@
 /* Previsión de carrera: track GPX → perfil kilómetro a kilómetro → ritmo y tiempo previstos. */
-import { fmtRitmo, fmtHoras, parseTiempo } from "./util.js?v=202611142019";
+import { fmtRitmo, fmtHoras, parseTiempo } from "./util.js?v=202611142024";
 
 const R = 6371000, RAD = Math.PI / 180;
 function dist(a, b) {
@@ -82,7 +82,7 @@ export function normalizarTrack(t) {
   return { ...t, v: 2, kms, sube: kms.reduce((x, k) => x + k.sube, 0), baja: kms.reduce((x, k) => x + k.baja, 0) };
 }
 
-const DIST = { "5k": 5, "10k": 10, media: 21.0975, maraton: 42.195 };
+const DIST = { "1k": 1, "5k": 5, "10k": 10, "15k": 15, media: 21.0975, maraton: 42.195 };
 
 /** Tiempo objetivo escrito de cualquier forma: «48:48», «sub 48:48», «bajar de 48'48''», «1:45», «1:45:00». */
 export function tiempoObjetivo(txt, km) {

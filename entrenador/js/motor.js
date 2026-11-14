@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611142019";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611142024";
 
 /* =========================================================
    Catálogos
@@ -15,7 +15,7 @@ export const OBJ = {
   ciclismo: "Marcha cicloturista / gran fondo", triatlon: "Triatlón"
 };
 export const PRUEBAS = {
-  "5k": "5 km", "10k": "10 km", media: "Media maratón", maraton: "Maratón",
+  "5k": "5 km", "10k": "10 km", "15k": "15 km", media: "Media maratón", maraton: "Maratón",
   ciclismo: "Marcha de bici", triatlon: "Triatlón", otra: "Otra carrera a pie"
 };
 export const PRIORIDAD = { A: "Principal", B: "Importante", C: "Preparación" };
@@ -47,7 +47,7 @@ export function contexto(a, lunes) {
   const A = carreras.filter(c => c.prioridad === "A" && c.fecha >= lunes).sort((x, y) => x.fecha.localeCompare(y.fecha))[0] || null;
   const semanas = A ? Math.floor(diasEntre(lunes, A.fecha) / 7) + 1 : 0;
   let obj = a.objetivo;
-  if (A && semanas <= 40) obj = A.prueba === "otra" ? (RUN_GOALS.includes(a.objetivo) ? a.objetivo : "10k") : A.prueba;
+  if (A && semanas <= 40) obj = A.prueba === "otra" ? (RUN_GOALS.includes(a.objetivo) ? a.objetivo : "10k") : A.prueba === "15k" ? "10k" : A.prueba; // un 15K se prepara como un 10K largo
   const semanaNum = Math.max(1, Math.floor(diasEntre(a.inicio || lunes, lunes) / 7) + 1);
   return { lunes, fin, A, semanas, obj, semanaNum, enSemana };
 }
@@ -158,7 +158,9 @@ export function calcZonas(a) {
 
   const m = a.marcas || {};
   let t10 = parseTiempo(m["10k"]);
-  const t5 = parseTiempo(m["5k"]), t21 = parseTiempo(m.media), t42 = parseTiempo(m.maraton);
+  const t5 = parseTiempo(m["5k"]), t21 = parseTiempo(m.media), t42 = parseTiempo(m.maraton), t1 = parseTiempo(m["1k"]), t15 = parseTiempo(m["15k"]);
+  if (!t10 && t15) t10 = t15 / Math.pow(1.5, 1.06);
+  if (!t10 && t1) t10 = t1 * Math.pow(10, 1.08);
   if (!t10 && t5) t10 = t5 * Math.pow(2, 1.06);
   if (!t10 && t21) t10 = t21 / Math.pow(2.10975, 1.06);
   if (!t10 && t42) t10 = t42 / Math.pow(4.2195, 1.08);
@@ -172,15 +174,16 @@ export function calcZonas(a) {
   let tipos = null, vdot = null, marcasV = null;
   if (t10) {
     // Todas sus marcas reales cuentan (5K, 10K, media, maratón). Sin marcas: el 5 km estimado.
-    marcasV = [["5k", 5000, t5], ["10k", 10000, parseTiempo(m["10k"])], ["media", 21097.5, t21], ["maraton", 42195, t42]]
+    marcasV = [["1k", 1000, t1], ["5k", 5000, t5], ["10k", 10000, parseTiempo(m["10k"])], ["15k", 15000, t15], ["media", 21097.5, t21], ["maraton", 42195, t42]]
       .filter(x => x[2] && x[2] / (x[1] / 1000) > 150).map(([k, metros, t]) => ({ k, metros, t, v: vdotDe(metros, t) }));
     if (!marcasV.length) marcasV = [{ k: "10k", metros: 10000, t: t10, v: vdotDe(10000, t10) }];
     // VDOT para los ritmos de entreno: media de sus marcas (el maratón pesa la mitad: depende mucho del fondo)
-    const pw = x => x.k === "maraton" ? 0.5 : 1;
+    const pw = x => x.k === "maraton" || x.k === "1k" ? 0.5 : 1; // el 1 km depende mucho de la velocidad y el maratón del fondo
     vdot = marcasV.reduce((s, x) => s + x.v * pw(x), 0) / marcasV.reduce((s, x) => s + pw(x), 0);
     const r = pct => ritmoVdot(vdot, pct);
     const e5 = tiempoMarcas(marcasV, 5000), e10 = tiempoMarcas(marcasV, 10000), e21 = tiempoMarcas(marcasV, 21097.5), e42 = tiempoMarcas(marcasV, 42195);
-    carrera = { "5k": { p: e5 / 5, t: e5 }, "10k": { p: e10 / 10, t: e10 }, media: { p: e21 / 21.0975, t: e21 }, maraton: { p: e42 / 42.195, t: e42 } };
+    const e1 = tiempoMarcas(marcasV, 1000), e15 = tiempoMarcas(marcasV, 15000);
+    carrera = { "1k": { p: e1, t: e1 }, "15k": { p: e15 / 15, t: e15 }, "5k": { p: e5 / 5, t: e5 }, "10k": { p: e10 / 10, t: e10 }, media: { p: e21 / 21.0975, t: e21 }, maraton: { p: e42 / 42.195, t: e42 } };
     // ritmos con nombre (s/km, [rápido, lento])
     const rango = (p, a, b) => [Math.round(p - a), Math.round(p + b)];
     tipos = {

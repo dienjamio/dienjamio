@@ -1,18 +1,18 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142019";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142019";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142019";
-import { BIBLIO } from "./biblioteca.js?v=202611142019";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142019";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142019";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142019";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142019";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142019";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142019";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142019";
-import { calcProgreso } from "./progreso.js?v=202611142019";
-import * as A from "./almacen.js?v=202611142019";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142019";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142024";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142024";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142024";
+import { BIBLIO } from "./biblioteca.js?v=202611142024";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142024";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142024";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142024";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142024";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142024";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142024";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142024";
+import { calcProgreso } from "./progreso.js?v=202611142024";
+import * as A from "./almacen.js?v=202611142024";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142024";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -275,7 +275,7 @@ const DEF = () => ({
   nombre: "", sexo: "h", edad: 35, nivel: "intermedio", peso: 70, altura: 172, objetivo: "10k", lesionZona: "",
   deportes: { run: true, bike: false, swim: false, fuerza: true },
   disp: DIAS.map((_, i) => ({ on: i !== 2, max: i < 5 ? 75 : 150 })), horas: "", descanso: 2,
-  fc: { max: "", rep: "", umbral: "", zonas: null }, marcas: { "5k": "", "10k": "", media: "", maraton: "" }, ftp: "", css: "",
+  fc: { max: "", rep: "", umbral: "", zonas: null }, marcas: { "1k": "", "5k": "", "10k": "", "15k": "", media: "", maraton: "" }, ftp: "", css: "",
   dieta: "omni", comidas: 5, sinGluten: false, sinLactosa: false, notas: "", mensaje: "", inicio: proximoLunes()
 });
 const proximoLunes = () => { const h = hoy(); return [5, 6].includes((new Date().getDay() + 6) % 7) ? sumaDias(lunesDe(h), 7) : lunesDe(h); };
@@ -297,7 +297,7 @@ function escribirForm(a) {
   const set = (n, v) => { f.elements[n].value = v ?? ""; };
   ["nombre", "telefono", "email", "sexo", "edad", "nivel", "peso", "altura", "objetivo", "lesionZona", "horas", "descanso", "ftp", "css", "dieta", "comidas", "notas", "mensaje", "inicio"].forEach(n => set(n, a[n]));
   set("fcmax", a.fc?.max); set("fcrep", a.fc?.rep); set("fcumbral", a.fc?.umbral);
-  set("m5k", a.marcas?.["5k"]); set("m10k", a.marcas?.["10k"]); set("mmedia", a.marcas?.media); set("mmaraton", a.marcas?.maraton);
+  set("m1k", a.marcas?.["1k"]); set("m15k", a.marcas?.["15k"]); set("m5k", a.marcas?.["5k"]); set("m10k", a.marcas?.["10k"]); set("mmedia", a.marcas?.media); set("mmaraton", a.marcas?.maraton);
   ["run", "bike", "swim", "fuerza"].forEach(n => { f.elements[n].checked = !!a.deportes?.[n]; });
   f.elements.sinGluten.checked = !!a.sinGluten; f.elements.sinLactosa.checked = !!a.sinLactosa;
   (a.disp || []).forEach((d, i) => { $(`[data-dia="${i}"]`).checked = !!d.on; $(`[data-max="${i}"]`).value = minTxt(+d.max); });
@@ -323,7 +323,7 @@ function leerForm() {
     inicio: v("inicio") ? lunesDe(v("inicio")) : proximoLunes(),
     disp, horas: num("horas"), descanso: +v("descanso"),
     fc: { max: num("fcmax"), rep: num("fcrep"), umbral: num("fcumbral"), zonas }, ritmosZona,
-    marcas: { "5k": v("m5k"), "10k": v("m10k"), media: v("mmedia"), maraton: v("mmaraton") }, ftp: num("ftp"), css: v("css"),
+    marcas: { "1k": v("m1k"), "15k": v("m15k"), "5k": v("m5k"), "10k": v("m10k"), media: v("mmedia"), maraton: v("mmaraton") }, ftp: num("ftp"), css: v("css"),
     dieta: v("dieta"), comidas: +v("comidas"), sinGluten: f.elements.sinGluten.checked, sinLactosa: f.elements.sinLactosa.checked,
     notas: v("notas"), mensaje: v("mensaje")
   };
@@ -425,7 +425,7 @@ async function actualizarFuturas(a) {
    ========================================================= */
 const enlace = a => new URL(`ver.html?d=${a.token}`, location.href).href;
 /** Versión de lo publicado: súbela cuando cambien cálculos que ve el deportista. */
-const PUB_V = 3;
+const PUB_V = 4;
 const AV_DEF = { registros: true, bienestar: true, mensajes: true, resultados: true, valoraciones: true };
 const prefAvisos = () => ({ ...AV_DEF, ...(ajustes.avisos || {}) });
 async function canalEntrenador() {
@@ -743,7 +743,7 @@ async function procesarTests(a) {
     const seg = r.act?.mejores?.["5k"] || (r.act?.dur ? r.act.dur * 5 / km : r.tiempo ? parseTiempo(r.tiempo) * 5 / km : 0);
     if (!seg || seg / 5 < 170 || seg / 5 > 600) continue;
     a.tests = [...(a.tests || []), { id: r.id, fecha: sumaDias(r.lunes, r.dia), t5: Math.round(seg) }];
-    const marcas = { ...(a.marcas || {}) }; delete marcas["10k"];
+    const marcas = { ...(a.marcas || {}) }; // el test actualiza su 5K; el resto de marcas siguen contando
     marcas["5k"] = fmtHoras(seg); a.marcas = marcas;
     await A.guardarFicha(a);
     await actualizarFuturas(a);

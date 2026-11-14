@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/icon-192.png">
-<link rel="stylesheet" href="styles.css?v=202611142019">
+<link rel="stylesheet" href="styles.css?v=202611142024">
 </head>
 <body>
 <header class="top no-print">
@@ -115,8 +115,10 @@
       <fieldset>
         <legend>5 · Marcas y potencia <span class="opc">(opcional)</span></legend>
         <div class="g2">
+          <label>Marca 1 km <input name="m1k" placeholder="m:ss"></label>
           <label>Marca 5 km <input name="m5k" placeholder="mm:ss"></label>
           <label>Marca 10 km <input name="m10k" placeholder="mm:ss"></label>
+          <label>Marca 15 km <input name="m15k" placeholder="h:mm:ss o mm:ss"></label>
           <label>Media maratón <input name="mmedia" placeholder="h:mm:ss"></label>
           <label>Maratón <input name="mmaraton" placeholder="h:mm:ss"></label>
           <label>FTP bici (vatios) <input name="ftp" type="number" min="80" max="500"></label>
@@ -260,6 +262,6 @@
 <dialog id="dlg-gen" class="hoja"><div id="gen"></div></dialog>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/app.js?v=202611142019"></script>
+<script type="module" src="js/app.js?v=202611142024"></script>
 </body>
 </html>

@@ -1,16 +1,16 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611142019";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611142019";
-import { leerArchivo, fusionar } from "./importar.js?v=202611142019";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611142019";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611142019";
-import { avisar, htmlSuscribir } from "./avisos.js?v=202611142019";
-import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611142019";
-import { htmlPrediccion } from "./prediccion.js?v=202611142019";
-import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611142019";
-import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611142019";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611142019";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611142024";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611142024";
+import { leerArchivo, fusionar } from "./importar.js?v=202611142024";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611142024";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611142024";
+import { avisar, htmlSuscribir } from "./avisos.js?v=202611142024";
+import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611142024";
+import { htmlPrediccion } from "./prediccion.js?v=202611142024";
+import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611142024";
+import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611142024";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611142024";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();

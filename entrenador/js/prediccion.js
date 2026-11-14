@@ -3,11 +3,11 @@
    1) Carreras y tests registrados (tiempo + distancia reales).
    2) Ritmo frente a pulso en rodajes continuos: a qué % de la reserva cardiaca va cada ritmo → VO2máx (VDOT).
    3) Mejores tramos de 5 km o más dentro de los entrenos (cota mínima: casi nunca son a tope). */
-import { vdotDe, tiempoVdot, tiempoMarcas } from "./motor.js?v=202611142019";
-import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611142019";
+import { vdotDe, tiempoVdot, tiempoMarcas } from "./motor.js?v=202611142024";
+import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611142024";
 
-const D = { "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
-const NOM = { "5k": "5 km", "10k": "10 km", media: "Media maratón", maraton: "Maratón" };
+const D = { "1k": 1000, "5k": 5000, "10k": 10000, "15k": 15000, media: 21097.5, maraton: 42195 };
+const NOM = { "1k": "1 km", "5k": "5 km", "10k": "10 km", "15k": "15 km", media: "Media maratón", maraton: "Maratón" };
 const vo2 = v => -4.60 + 0.182258 * v + 0.000104 * v * v; // v en m/min
 const segs = t => { const p = String(t || "").trim().split(":").map(Number); if (!t || p.some(isNaN)) return 0; return p.reduce((a, b) => a * 60 + b, 0); };
 const num = x => parseFloat(String(x ?? "").replace(",", ".")) || 0;
@@ -71,7 +71,7 @@ export function predecir(datos) {
   const h = hoy();
   const tiempos = {};
   for (const [k, km] of Object.entries(D)) tiempos[k] = tiempoMarcas(Z.marcasV, km);
-  const nom = { "5k": "5K", "10k": "10K", media: "media", maraton: "maratón" };
+  const nom = { "1k": "1 km", "5k": "5K", "10k": "10K", "15k": "15K", media: "media", maraton: "maratón" };
   const fuente = "sus marcas de " + Z.marcasV.map(x => `${nom[x.k]} (${fmtHoras(x.t)})`).join(" y ");
   // señal de los entrenos (informativa): tramos de 5 km o más y eficiencia ritmo/pulso
   const ahora = vdotVentana(datos, h);

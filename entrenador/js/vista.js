@@ -1,8 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611142019";
-import { htmlDetalle } from "./detalle.js?v=202611142019";
-import { infoEjercicio } from "./biblioteca.js?v=202611142019";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611142019";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611142024";
+import { htmlDetalle } from "./detalle.js?v=202611142024";
+import { infoEjercicio } from "./biblioteca.js?v=202611142024";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611142024";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -183,7 +183,7 @@ export function htmlMenuDia(snap, i, ed = false) {
 export function htmlZonas(Z) {
   const fila = i => `<tr><td>${ZNOM[i]}</td><td>${Z.fc[i][0]}-${Z.fc[i][1]}</td>${Z.ritmos ? `<td>${fmtRitmo(Z.ritmos[i][0])}-${fmtRitmo(Z.ritmos[i][1])}</td>` : ""}${Z.potencia ? `<td>${i === 0 ? "<" + Z.potencia[0][1] : Z.potencia[i][0] + "-" + Z.potencia[i][1]}</td>` : ""}${Z.nado ? `<td>${fmtRitmo(Z.nado[i][0])}-${fmtRitmo(Z.nado[i][1])}</td>` : ""}<td>${RPE[i]}</td></tr>`;
   const car = Z.carrera ? `<h3>Ritmos y tiempos estimados</h3><div class="wrap"><table><tr><th>Prueba</th><th>Ritmo</th><th>Tiempo</th></tr>
-    ${[["5k", "5 km"], ["10k", "10 km"], ["media", "Media maratón"], ["maraton", "Maratón"]].map(([k, n]) => `<tr><td>${n}</td><td>${fmtRitmo(Z.carrera[k].p)} /km</td><td>${fmtHoras(Z.carrera[k].t)}</td></tr>`).join("")}
+    ${[["1k", "1 km"], ["5k", "5 km"], ["10k", "10 km"], ["15k", "15 km"], ["media", "Media maratón"], ["maraton", "Maratón"]].filter(([k]) => Z.carrera[k]).map(([k, n]) => `<tr><td>${n}</td><td>${fmtRitmo(Z.carrera[k].p)} /km</td><td>${fmtHoras(Z.carrera[k].t)}</td></tr>`).join("")}
     </table></div>` : "";
   const kmh = r => (3600 / ((r[0] + r[1]) / 2)).toFixed(1).replace(".", ",");
   const tipos = Z.tipos ? `<h3>Tus ritmos${Z.vdot && !Z.ritmosPropios ? ` <small>(VDOT ${String(Z.vdot).replace(".", ",")}${Z.ritmoEstimado ? ", estimado" : ""})</small>` : ""}</h3><div class="wrap"><table class="ritmos-t"><tr><th>Ritmo</th><th>Calle /km</th><th>Cinta</th><th>Pulso</th></tr>
