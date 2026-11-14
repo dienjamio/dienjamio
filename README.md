@@ -10,13 +10,15 @@ La app de verdad sigue en Claude: https://claude.ai/artifact/LvGeruJa3M8ibwMCVNu
 
 ## Entrenador personal (`entrenador/`)
 
-App web para entrenadores: metes los datos del deportista y genera su **plan semanal** completo.
+App web para entrenadores. Cada deportista tiene su ficha, su plan semanal y un enlace propio.
 
-- **Entrenos**: carrera, bici, natación, fuerza (con ejercicios, series y repeticiones), movilidad y días de descanso, con duración, zonas y estructura (calentamiento, parte principal, vuelta a la calma).
-- **Periodización**: fase según las semanas que faltan para la prueba (base, construcción, específico, puesta a punto, semana de competición) y descarga cada 4.ª semana.
-- **Objetivos**: salud, perder grasa, 5 km, 10 km, media maratón, maratón, marcha cicloturista y triatlón.
-- **Zonas**: pulso (FC máx/reposo), ritmos por km (a partir de una marca de 5 o 10 km) y vatios (FTP).
-- **Menú diario**: calorías y macros ajustados a la carga de cada día, con platos y cantidades; dieta omnívora, vegetariana o vegana, sin gluten y sin lactosa.
-- Guarda varios deportistas en el navegador, imprime / exporta a PDF, copia el plan para WhatsApp y genera la semana siguiente con un botón.
+- **Pestañas**: Deportistas · Nuevo deportista · ficha de cada deportista (Semana, Menú, Carreras, Datos, Zonas).
+- **Disponibilidad por día** con tiempo máximo: el plan nunca se pasa (p. ej. L-V 1h15, S-D 2h30).
+- **Carreras** con fecha y prioridad: la A marca las fases (base, construcción, específico, puesta a punto); B y C van en su día y el plan se ajusta alrededor. Las semanas sin cambios a mano se rehacen solas.
+- **Cambios a mano**: cualquier sesión se puede cambiar, mover, borrar o añadir.
+- **Pulso**: FC máx, reposo, umbral o las zonas propias del deportista. Ritmos por marcas, vatios por FTP y ritmo de nado.
+- **Datos**: sube actividades .FIT/.GPX/.TCX, la lista .CSV de Garmin Connect o Strava, e informes PDF. Sugiere FC máxima, marcas, FTP y volumen.
+- **Objetivos**: salud, bajar peso, ganar músculo, vuelta tras lesión, 5 km, 10 km, media, maratón, bici y triatlón.
+- **Enlace del deportista** (`ver.html?d=…`): ve su día, su semana, su menú y sus carreras, siempre actualizado. Necesita Firebase.
 
-Todo funciona en el navegador (sin servidor). Archivos: `index.html`, `styles.css`, `app.js`.
+Archivos: `index.html` (entrenador), `ver.html` (deportista), `js/` (motor, lectura de archivos, almacenamiento, pantallas) y `js/firebase-config.js` (configuración de Firebase).

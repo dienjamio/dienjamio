@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mi plan</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="Tus entrenos y tu menú de la semana.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="deportista">
+<header class="top">
+  <div class="marca"><span class="logo">⚡</span><div><h1 id="nombre">Mi plan</h1><p id="objetivo"></p></div></div>
+</header>
+<main class="contenido estrecho" id="main">
+  <p class="cargando">Cargando tu plan…</p>
+</main>
+<nav class="barra-inf" id="barra" hidden>
+  <button data-v="hoy" aria-current="page"><span>📍</span>Hoy</button>
+  <button data-v="semana"><span>📅</span>Semana</button>
+  <button data-v="menu"><span>🍽️</span>Menú</button>
+  <button data-v="carreras"><span>🏁</span>Carreras</button>
+</nav>
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="js/ver.js"></script>
+</body>
+</html>
