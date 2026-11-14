@@ -1,17 +1,18 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142001";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142001";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142001";
-import { BIBLIO } from "./biblioteca.js?v=202611142001";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142001";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142001";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142001";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142001";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142001";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142001";
-import { calcProgreso } from "./progreso.js?v=202611142001";
-import * as A from "./almacen.js?v=202611142001";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142001";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142006";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142006";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142006";
+import { BIBLIO } from "./biblioteca.js?v=202611142006";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142006";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142006";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142006";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142006";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142006";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142006";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142006";
+import { calcProgreso } from "./progreso.js?v=202611142006";
+import * as A from "./almacen.js?v=202611142006";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142006";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -411,7 +412,19 @@ async function actualizarFuturas(a) {
    Publicación (enlace del deportista)
    ========================================================= */
 const enlace = a => new URL(`ver.html?d=${a.token}`, location.href).href;
+const AV_DEF = { registros: true, bienestar: true, mensajes: true, resultados: true, valoraciones: true };
+const prefAvisos = () => ({ ...AV_DEF, ...(ajustes.avisos || {}) });
+async function canalEntrenador() {
+  if (!ajustes.ntfy) { ajustes.ntfy = nuevoCanal("dnj-ent-"); try { await A.guardarAjustes(ajustes); } catch (e) { } }
+  return ajustes.ntfy;
+}
+/** Aviso al móvil del deportista (si se ha suscrito a su canal en ntfy). */
+async function avisarDeportista(a, titulo, texto) {
+  if (!a.ntfy || !A.nube) return false;
+  return avisar(a.ntfy, { titulo, texto, click: enlace(a), tags: ["runner"] });
+}
 async function publicar(a) {
+  if (!a.ntfy) { a.ntfy = nuevoCanal("dnj-"); try { await A.guardarFicha(a); } catch (e) { } }
   if (!A.nube || !a) return;
   await asegurarSemanas(a);
   const semanas = {}, l0 = lunesDe(hoy());
@@ -427,6 +440,7 @@ async function publicar(a) {
       marcas: a.marcas || {},
       pred: predDe(a),
       entrenador: ajustes.presentacion?.nombre || "",
+      ntfy: a.ntfy, ntfyEnt: ajustes.ntfy || "", avisosEnt: prefAvisos(), id: a.id,
       kmAno: Math.round((a.actividades || []).filter(x => x.dep === "run" && x.fecha >= hoy().slice(0, 4) + "-01-01").reduce((t, x) => t + (+x.km || 0), 0)),
       carrerasHechas: (a.carreras || []).filter(c => c.fecha < hoy()).length,
       videos: ajustes.videos || {},
@@ -499,7 +513,8 @@ function pintarAtleta() {
         <button class="btn pri mini" data-acc="copiar-enlace" ${A.nube ? "" : "disabled"}>🔗 Copiar enlace</button>
         <button class="btn sec mini" data-acc="compartir" ${A.nube ? "" : "disabled"}>${a.telefono ? "💬 Enviar por WhatsApp" : "📤 Enviar"}</button>
         <a class="btn sec mini" href="${A.nube ? esc(enlace(a)) + "&yo=1" : "#"}" target="_blank" rel="noopener" ${A.nube ? "" : 'aria-disabled="true"'}>👁️ Ver como él</a>
-        ${a.telefono && A.nube ? `<button class="btn sec mini" data-acc="avisar">📣 Avisar de cambios</button>` : ""}
+        ${a.telefono && A.nube ? `<button class="btn sec mini" data-acc="avisar">📣 Avisar por WhatsApp</button>` : ""}
+        ${A.nube ? `<button class="btn sec mini" data-acc="aviso-movil">🔔 Avisar al móvil</button>` : ""}
       </div>
     </div>`;
   $$("#subtabs [data-sub]").forEach(b => b.setAttribute("aria-selected", b.dataset.sub === sub));
@@ -634,9 +649,9 @@ async function enviarMensaje(a) {
   const id = idMensaje(), m = { tipo: "mensaje", de: "entrenador", texto: t, t: new Date().toISOString(), leido: false };
   try { await A.guardarAporte(a.token, id, m); } catch (e) { return toast("No se ha podido enviar: " + (e.code || e.message)); }
   (a._aportes = a._aportes || []).push({ ...m, id, cuando: m.t });
+  avisarDeportista(a, `💬 Mensaje de ${ajustes.presentacion?.nombre ? ajustes.presentacion.nombre.split(" ")[0] : "tu entrenador"}`, t.slice(0, 300));
   pintarChat();
-  if (a.telefono) toast("Enviado. Lo verá al abrir su enlace (si quieres, avísale con 📣).");
-  else toast("Enviado");
+  toast("Enviado");
 }
 
 /* ---------------- Informe mensual ---------------- */
@@ -778,6 +793,7 @@ async function guardarComentario() {
   const x = snap.dias[dia].ses.find(y => y.id === s.id);
   x.coment = $("#com-txt").value.trim();
   await A.guardarSemana(actual, snap); await publicar(actual);
+  if (x.coment) avisarDeportista(actual, `💬 Tu entrenador ha comentado «${x.t}»`, x.coment.slice(0, 300));
   cerrarDialogo(); toast("Comentario guardado: lo verá en su entreno"); pintarAtleta();
 }
 async function iaSemana() {
@@ -880,6 +896,15 @@ function pintarHerr() {
         <div class="small muted">${esc((p.p || []).join(" · "))}${p.ej ? esc(" · " + p.ej.map(x => x.n).join(", ")) : ""}</div></div>
         ${p.propia ? `<button class="quita" data-acc="borrar-plantilla" data-i="${i}" aria-label="Borrar">✕</button>` : ""}</div>`).join("")}
     </article>`;
+  } else if (subH === "avisos") {
+    const c = ajustes.ntfy || "", pa = prefAvisos();
+    el.innerHTML = `<article class="dia"><div class="dia-cab"><h3>🔔 Avisos en tu móvil</h3></div>
+      <p class="ayuda">Te llega una notificación cuando tus deportistas registran un entreno, se levantan mal o con dolor, valoran la semana, ponen un resultado o te escriben. Funciona con la app gratuita <b>ntfy</b>, sin cuentas ni tarjeta.</p>
+      ${c ? htmlSuscribir(c, "tú") : `<button class="btn pri" data-acc="crear-canal">Activar mis avisos</button>`}
+      ${c ? `<h4 class="sep">¿De qué quieres que te avise?</h4>
+      ${[["registros", "✅ Entrenos registrados"], ["bienestar", "🔴 Se levanta mal o con dolor"], ["mensajes", "💬 Mensajes"], ["resultados", "🏅 Resultados de carrera"], ["valoraciones", "📝 Valoraciones de la semana"]].map(([k, t]) => `<label class="chk"><input type="checkbox" data-aviso="${k}" ${pa[k] ? "checked" : ""}> ${t}</label>`).join("")}
+      <p class="small">Tus deportistas activan sus avisos (mensajes tuyos, comentarios y recordatorio del entreno del día) desde su enlace: <b>Progreso → 🔔 Avisos en tu móvil</b>.</p>` : ""}
+    </article>`;
   } else if (subH === "claude") {
     el.innerHTML = `<article class="dia"><div class="dia-cab"><h3>🤖 Análisis con Claude</h3></div>
       <p class="ayuda">Con tu clave de la API de Anthropic, Claude lee las capturas y los datos de tus deportistas y te redacta comentarios de cada entreno y análisis de cada semana (botones «💬 Comentar» y «💬 Mensaje / 🤖 Análisis» en su semana).</p>
@@ -950,6 +975,9 @@ function leerPres() {
 }
 async function accionHerr(t) {
   const acc = t.dataset.acc;
+  if (acc === "crear-canal") { await canalEntrenador(); for (const x of atletas.filter(x => x.token)) publicar(x); pintarHerr(); return true; }
+  if (acc === "copiar-canal") { try { await navigator.clipboard.writeText(t.dataset.c); toast("Copiado"); } catch (e) { prompt("Copia el nombre del canal:", t.dataset.c); } return true; }
+  if (acc === "probar-aviso") { const ok = await avisar(t.dataset.c, { titulo: "🔔 Dienjamio Entrenador", texto: "¡Funciona! Así te llegarán los avisos.", tags: ["white_check_mark"] }); toast(ok ? "Aviso enviado: debería llegarte en unos segundos" : "No se ha podido enviar (revisa la conexión)"); return true; }
   if (acc === "borrar-plantilla") {
     const p = plantillas()[+t.dataset.i]; if (!p?.propia || !confirm(`¿Borrar la plantilla «${p.nombre}»?`)) return true;
     ajustes.plantillas = (ajustes.plantillas || []).filter(x => x.nombre !== p.nombre);
@@ -1347,6 +1375,16 @@ function enlazar() {
     if (acc === "chat-enviar") return enviarMensaje(a);
     if (acc === "chat-recargar") { try { a._aportes = await A.listarAportes(a.token); } catch (e) { } return pintarChat(); }
     if (acc === "informe") return dialogoInforme(a);
+    if (acc === "aviso-movil") {
+      return dialogo(`<h3>🔔 Aviso a su móvil</h3>
+        <p class="small">Le llega como notificación si ha activado los avisos en su enlace (Progreso → 🔔 Avisos en tu móvil, con la app ntfy). Al pulsarla abre su plan.</p>
+        <label>Mensaje<textarea id="aviso-txt" rows="3">He actualizado tu plan, échale un vistazo 💪</textarea></label>
+        <div class="fila"><button class="btn sec" data-acc="cerrar-dlg">Cancelar</button><button class="btn pri" data-acc="enviar-aviso">Enviar</button></div>`);
+    }
+    if (acc === "enviar-aviso") {
+      const ok = await avisarDeportista(a, `📣 ${ajustes.presentacion?.nombre ? ajustes.presentacion.nombre.split(" ")[0] : "Tu entrenador"}`, $("#aviso-txt").value.trim() || "Tienes novedades en tu plan");
+      $("#dlg-gen").close(); return toast(ok ? "🔔 Aviso enviado" : "No se ha podido enviar el aviso (revisa la conexión)");
+    }
     if (acc === "ia-todo") {
       const el = $("#ia-todo-res"); t.disabled = true; el.innerHTML = `<p class="small muted">🤖 Analizando todos sus datos…</p>`;
       try {
@@ -1464,6 +1502,12 @@ function enlazar() {
   $("#form").addEventListener("submit", guardarForm);
   $("#form").elements.objetivo.addEventListener("change", mostrarSegunObjetivo);
   $("#zonas-propias").addEventListener("change", e => { $("#zp").hidden = !e.target.checked; });
+  document.addEventListener("change", async e => {
+    const k = e.target.dataset?.aviso; if (!k) return;
+    ajustes.avisos = { ...prefAvisos(), [k]: e.target.checked };
+    await A.guardarAjustes(ajustes); for (const x of atletas.filter(x => x.token)) publicar(x);
+    toast("Preferencias de avisos guardadas");
+  });
   $("#r-aplicar").addEventListener("click", () => {
     const lv = leerMin($("#r-lv").value), sd = leerMin($("#r-sd").value);
     if (isNaN(lv) || isNaN(sd)) return toast("Escribe el tiempo como 1:15 o 75");

@@ -1,8 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611142001";
-import { htmlDetalle } from "./detalle.js?v=202611142001";
-import { infoEjercicio } from "./biblioteca.js?v=202611142001";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611142001";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611142006";
+import { htmlDetalle } from "./detalle.js?v=202611142006";
+import { infoEjercicio } from "./biblioteca.js?v=202611142006";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611142006";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 

@@ -28,3 +28,10 @@
 - Deportista: semana de carrera con checklist, «¿Cómo fue la carrera?» (actualiza sus marcas si es mejor),
   resumen de su semana los lunes, pulso en reposo y peso opcionales y «👀 Tu entrenador lo ha visto».
 - Los aportes con tipos nuevos funcionan aunque las reglas sean antiguas (se guardan como `sesion` + `clase`).
+
+## Avisos al móvil (ntfy)
+
+- Gratis, sin cuentas, tarjeta ni servidor: cada persona instala la app **ntfy** y se suscribe a su canal secreto.
+- Entrenador (Herramientas → 🔔 Avisos): entrenos registrados, bienestar malo o con dolor, mensajes, resultados y valoraciones, con preferencias.
+- Deportista (Progreso → 🔔 Avisos en tu móvil): mensajes y comentarios del entrenador, «🔔 Avisar al móvil» desde su ficha,
+  y recordatorio diario del entreno a la hora que elija (se programan hasta 2 días por delante al abrir su enlace).
