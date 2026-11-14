@@ -291,7 +291,14 @@ async function publicar(a) {
       zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo },
       semanas
     });
-  } catch (e) { console.error(e); toast("Guardado, pero no se ha podido actualizar su enlace: " + (e.code || e.message)); }
+    estadoEnlace(a, true);
+  } catch (e) { console.error(e); estadoEnlace(a, false, e.code || e.message); toast("Guardado, pero no se ha podido actualizar su enlace: " + (e.code || e.message)); }
+}
+
+function estadoEnlace(a, ok, err = "") {
+  a._pub = { ok, err };
+  const el = document.getElementById("estado-enlace");
+  if (el && actual?.id === a.id) el.innerHTML = ok ? "✅ Al día: ve lo último que has guardado" : `⚠️ No se ha podido actualizar (${esc(err)}). Vuelve a abrir la ficha para reintentar.`;
 }
 
 /* =========================================================
@@ -308,6 +315,7 @@ async function abrir(id, mantener = false) {
   history.replaceState(null, "", `?a=${a.id}`);
   vista("atleta");
   pintarAtleta();
+  publicar(a); // mantiene su enlace al día (en segundo plano)
 }
 
 function pintarAtleta() {
@@ -323,6 +331,7 @@ function pintarAtleta() {
     <div class="enlace">
       <span class="lbl">Su enlace</span>
       <code>${A.nube ? esc(enlace(a)) : "Disponible al conectar Firebase"}</code>
+      ${A.nube ? `<div class="small" id="estado-enlace">${a._pub ? (a._pub.ok ? "✅ Al día: ve lo último que has guardado" : `⚠️ No se ha podido actualizar (${esc(a._pub.err)})`) : "⏳ Actualizando…"}</div>` : ""}
       <div class="fila">
         <button class="btn pri mini" data-acc="copiar-enlace" ${A.nube ? "" : "disabled"}>🔗 Copiar enlace</button>
         <button class="btn sec mini" data-acc="compartir" ${A.nube ? "" : "disabled"}>${a.telefono ? "💬 Enviar por WhatsApp" : "📤 Enviar"}</button>
@@ -408,7 +417,7 @@ const AYUDA = `<details class="como"><summary>¿Cómo consigue el deportista ese
   </ul></details>`;
 function htmlSubida(id) {
   return `<label class="soltar" id="soltar-${id}">
-      <input type="file" id="f-${id}" multiple accept=".zip,.fit,.gpx,.tcx,.csv,.json,.gz,.pdf,image/*">
+      <input type="file" id="f-${id}" multiple>
       <b>📂 Sube su historial</b>
       <span>El <b>ZIP</b> con sus datos de Garmin, Strava o Polar (tal cual llega), actividades sueltas .FIT, .GPX o .TCX, la lista .CSV de actividades, e informes en PDF o foto.</span>
     </label>
@@ -426,6 +435,7 @@ function enlazarSubida(id, fn) {
 const esDoc = f => /\.(pdf|png|jpe?g|webp|heic)$/i.test(f.name) || f.type.startsWith("image/") || f.type === "application/pdf";
 async function procesarArchivos(files, avisar) {
   const desde = desdePeriodo(), acts = [], docs = [], errores = [];
+  let viejas = 0, masVieja = null;
   for (const f of files) {
     try {
       avisar(`Leyendo ${f.name}…`);
@@ -434,10 +444,21 @@ async function procesarArchivos(files, avisar) {
         if (f.size > lim) throw new Error(`pesa ${Math.round(f.size / 1024)} KB; el máximo es ${Math.round(lim / 1024)} KB (prueba a comprimirlo)`);
         const datos = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
         docs.push({ id: uid(10), nombre: f.name, tipo: f.type || "application/pdf", tam: f.size, fecha: hoy(), datos });
-      } else acts.push(...await leerArchivo(f, { desde, progreso: t => avisar(`${f.name}: ${t}`) }));
+      } else {
+        const r = await leerArchivo(f, { desde: "0000", progreso: t => avisar(`${f.name}: ${t}`) });
+        for (const x of r) { if (x.fecha >= desde) acts.push(x); else { viejas++; if (!masVieja || x.fecha > masVieja) masVieja = x.fecha; } }
+      }
     } catch (e) { errores.push(`${f.name}: ${e.message}`); }
   }
-  return { acts, docs, errores };
+  // la misma actividad puede venir dos veces en un ZIP (lista + archivo original): se juntan
+  return { acts: fusionar([], acts).lista, docs, errores, viejas, masVieja, desde, n: files.length };
+}
+/** Explicación de lo leído, para que nunca parezca que no ha pasado nada. */
+function htmlLeido(r) {
+  const p = [`📂 ${r.n} archivo${r.n > 1 ? "s" : ""} leído${r.n > 1 ? "s" : ""}: <b>${r.acts.length} actividad${r.acts.length === 1 ? "" : "es"}</b> de los últimos ${PERIODOS[periodo]}${r.docs.length ? ` y ${r.docs.length} documento${r.docs.length > 1 ? "s" : ""}` : ""}.`];
+  if (r.viejas) p.push(`<span class="alerta-l">⚠️ ${r.viejas} actividad${r.viejas > 1 ? "es son" : " es"} anterior${r.viejas > 1 ? "es" : ""} al ${fechaCorta(r.desde)} (la más reciente de ellas, del ${fechaCorta(r.masVieja)}) y no se ha${r.viejas > 1 ? "n" : ""} usado. Si las quieres, elige «1 año» y vuelve a subirlas.</span>`);
+  if (!r.acts.length && !r.viejas && !r.docs.length && !r.errores.length) p.push(`<span class="alerta-l">⚠️ No he encontrado actividades en ${r.n > 1 ? "esos archivos" : "ese archivo"}.</span>`);
+  return `<p class="small">${p.join("<br>")}</p>${r.errores.length ? `<ul class="errores">${r.errores.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
 }
 const coma = x => String(x).replace(".", ",");
 function htmlResumenCorto(H) {
@@ -540,7 +561,7 @@ async function importar(files) {
   } catch (e) { r.errores.push("No se ha podido guardar: " + e.message); }
   archivos = [];
   await pintarDatos();
-  $("#import-msg").innerHTML = `<p class="ok-msg">✅ ${nuevas} actividad${nuevas === 1 ? "" : "es"} nueva${nuevas === 1 ? "" : "s"}${r.acts.length !== nuevas ? ` (${r.acts.length - nuevas} ya estaban)` : ""}${r.docs.length ? ` y ${r.docs.length} documento${r.docs.length > 1 ? "s" : ""}` : ""}.${rehecho}</p>${r.errores.length ? `<ul class="errores">${r.errores.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
+  $("#import-msg").innerHTML = `${nuevas || r.docs.length ? `<p class="ok-msg">✅ ${nuevas} actividad${nuevas === 1 ? "" : "es"} nueva${nuevas === 1 ? "" : "s"}${r.acts.length !== nuevas ? ` (${r.acts.length - nuevas} ya estaban)` : ""}${r.docs.length ? ` y ${r.docs.length} documento${r.docs.length > 1 ? "s" : ""} guardado${r.docs.length > 1 ? "s" : ""}` : ""}.${rehecho}</p>` : r.acts.length ? `<p class="ok-msg">✅ Ya estaban todas subidas: no hay nada nuevo.</p>` : ""}${htmlLeido(r)}`;
 }
 
 async function aplicarSug(lista) {
@@ -564,14 +585,17 @@ function prepararSubidaForm() {
   $("#subida-form").innerHTML = htmlSubida("form");
   $("#form-hist-msg").innerHTML = editando?.hist ? `<p class="muted small">Ya tiene ${editando.actividades.length} actividades: ${htmlResumenCorto(editando.hist)}</p>` : "";
   enlazarSubida("form", async files => {
-    const msg = $("#form-hist-msg");
-    const r = await procesarArchivos(files, t => { msg.innerHTML = `<p class="cargando">⏳ ${esc(t)}</p>`; });
+    const msg = $("#form-hist-msg"), btn = $("#btn-guardar"), txt = btn.textContent;
+    btn.disabled = true; btn.textContent = "⏳ Leyendo archivos… espera";
+    let r;
+    try { r = await procesarArchivos(files, t => { msg.innerHTML = `<p class="cargando">⏳ ${esc(t)}</p>`; }); }
+    finally { btn.disabled = false; btn.textContent = txt; }
     pendientes.acts.push(...r.acts); pendientes.docs.push(...r.docs);
     const { lista } = fusionar(editando?.actividades || [], pendientes.acts);
     const H = lista.length ? resumen(lista) : null;
-    msg.innerHTML = `${H ? `<p class="ok-msg">✅ ${lista.length} actividades leídas</p><p class="small">${htmlResumenCorto(H)}</p><p class="muted small">Se usarán al guardar para los campos que dejes vacíos (pulso, marcas, FTP, horas).</p>` : ""}
+    msg.innerHTML = `${htmlLeido(r)}${H ? `<p class="ok-msg">✅ Listo para guardar: ${lista.length} actividades</p><p class="small">${htmlResumenCorto(H)}</p>` : ""}
       ${pendientes.docs.length ? `<p class="small">📄 ${pendientes.docs.length} documento${pendientes.docs.length > 1 ? "s" : ""} listo${pendientes.docs.length > 1 ? "s" : ""} para guardar.</p>` : ""}
-      ${r.errores.length ? `<ul class="errores">${r.errores.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}`;
+      ${H || pendientes.docs.length ? `<p class="muted small">Se guardan al pulsar el botón de abajo. Lo que dejes vacío en la ficha (pulso, marcas, FTP, horas) lo sacarán estos datos.</p>` : ""}`;
   });
 }
 async function guardarPendientes(a) {

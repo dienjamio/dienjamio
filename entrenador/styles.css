@@ -208,6 +208,7 @@ h4.sep{margin:16px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:
 .como summary{cursor:pointer;font-weight:700}
 .como li{margin:4px 0}
 .ok-msg{color:var(--baja);font-weight:700}
+.alerta-l{color:var(--media)}
 .alerta{background:#2A2106;border-radius:10px;padding:8px 10px;color:var(--ink)}
 .periodo{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--ink2)}
 .periodo .chip{padding:6px 11px;font-size:13px}

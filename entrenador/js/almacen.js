@@ -59,12 +59,19 @@ async function idbOp(modo, fn) {
 /* ---------------- API ---------------- */
 const ref = (...p) => fb.doc(db, "entrenadores", usuario.uid, "deportistas", ...p);
 const col = (...p) => fb.collection(db, "entrenadores", usuario.uid, "deportistas", ...p);
-const limpio = o => JSON.parse(JSON.stringify(o)); // Firestore no admite undefined
+/* Firestore no admite undefined ni listas dentro de listas (p. ej. las zonas [[120,135],…]).
+   Al guardar, cada lista interior se envuelve como {_l:[…]} y al leer se deshace. */
+const envolver = v => Array.isArray(v) ? v.map(x => Array.isArray(x) ? { _l: envolver(x) } : envolver(x))
+  : (v && typeof v === "object") ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, envolver(x)])) : v;
+const desenvolver = v => Array.isArray(v) ? v.map(desenvolver)
+  : (v && typeof v === "object") ? (Array.isArray(v._l) && Object.keys(v).length === 1 ? desenvolver(v._l) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, desenvolver(x)]))) : v;
+export const limpio = o => envolver(JSON.parse(JSON.stringify(o)));
+export const leer = d => desenvolver(d);
 
 export async function listar() {
   if (!nube) return lget(KEY, []);
   const q = await fb.getDocs(fb.collection(db, "entrenadores", usuario.uid, "deportistas"));
-  return q.docs.map(d => d.data());
+  return q.docs.map(d => leer(d.data()));
 }
 export async function guardarFicha(a) {
   const { semanas, ...ficha } = a;
@@ -79,7 +86,7 @@ export async function guardarFicha(a) {
 export async function cargarSemanas(a) {
   if (!nube) return lget(KEY_S(a.id), {});
   const q = await fb.getDocs(col(a.id, "semanas"));
-  const out = {}; q.docs.forEach(d => { out[d.id] = d.data(); });
+  const out = {}; q.docs.forEach(d => { out[d.id] = leer(d.data()); });
   return out;
 }
 export async function guardarSemana(a, snap) {
@@ -136,5 +143,5 @@ export async function leerPublico(token) {
   if (!nube) throw new Error("sin-nube");
   await cargarFirebase();
   const d = await fb.getDoc(fb.doc(db, "publico", token));
-  return d.exists() ? d.data() : null;
+  return d.exists() ? leer(d.data()) : null;
 }
