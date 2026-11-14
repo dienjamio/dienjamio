@@ -7,13 +7,13 @@
 <meta name="robots" content="noindex">
 <meta name="description" content="Tus entrenos y tu menú de la semana.">
 <meta name="theme-color" content="#000000">
-<link rel="icon" href="../icon-192.png">
-<link rel="apple-touch-icon" href="../icon-192.png">
-<link rel="stylesheet" href="styles.css?v=202611141259">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<link rel="stylesheet" href="styles.css?v=202611141518">
 </head>
 <body class="deportista">
 <header class="top">
-  <div class="marca"><span class="logo">⚡</span><div><h1 id="nombre">Mi plan</h1><p id="objetivo"></p></div></div>
+  <div class="marca"><img class="logo-img" src="img/logo.svg" alt="" width="44" height="44"><div><h1 id="nombre">Mi plan</h1><p id="objetivo"></p></div></div>
 </header>
 <main class="contenido estrecho" id="main">
   <p class="cargando">Cargando tu plan…</p>
@@ -23,8 +23,77 @@
   <button data-v="semana"><span>📅</span>Semana</button>
   <button data-v="menu"><span>🍽️</span>Menú</button>
   <button data-v="carreras"><span>🏁</span>Carreras</button>
+  <button data-v="progreso"><span>📈</span>Progreso</button>
 </nav>
+
+<!-- Registrar un entreno -->
+<dialog id="dlg-reg" class="hoja">
+  <form method="dialog" id="f-reg">
+    <h3>Registrar entreno</h3>
+    <p class="small" id="reg-t"></p>
+    <div class="checks opciones">
+      <label class="chip"><input type="radio" name="hecho" value="si"> ✅ Hecho</label>
+      <label class="chip"><input type="radio" name="hecho" value="parcial"> ◐ A medias</label>
+      <label class="chip"><input type="radio" name="hecho" value="no"> ✖ No pude</label>
+    </div>
+    <div class="g2">
+      <label>Esfuerzo (1 fácil · 10 a tope) <select name="rpe"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+      <label>Kilómetros <input name="km" inputmode="decimal" placeholder="opcional"></label>
+      <label>Tiempo <input name="tiempo" placeholder="opcional, ej. 45:20"></label>
+      <label>Pulso medio <input name="fc" inputmode="numeric" placeholder="opcional"></label>
+    </div>
+    <label>¿Cómo te has sentido? <textarea name="texto" rows="2" placeholder="Piernas, sensaciones, lo que quieras contar…"></textarea></label>
+    <div class="foto-reg">
+      <label class="btn sec mini">📷 Añadir captura del reloj o de Strava <input type="file" id="reg-foto-in" accept="image/*" hidden></label>
+      <button type="button" class="quita" id="reg-quitar" hidden>Quitar foto</button>
+      <div id="reg-foto"></div>
+    </div>
+    <div class="acciones fila"><span class="sp"></span><button value="cancelar" class="btn sec mini" formnovalidate>Cancelar</button><button value="guardar" class="btn pri mini">Guardar</button></div>
+  </form>
+</dialog>
+
+<!-- Valorar la semana -->
+<dialog id="dlg-val" class="hoja">
+  <form method="dialog" id="f-val">
+    <h3>¿Cómo ha ido la semana?</h3>
+    <div class="checks opciones">
+      <label class="chip"><input type="radio" name="sensacion" value="muy_facil"> 😴 Muy fácil</label>
+      <label class="chip"><input type="radio" name="sensacion" value="facil"> 🙂 Fácil</label>
+      <label class="chip"><input type="radio" name="sensacion" value="bien"> 💪 Bien</label>
+      <label class="chip"><input type="radio" name="sensacion" value="dura"> 😮‍💨 Dura</label>
+      <label class="chip"><input type="radio" name="sensacion" value="excesiva"> 🥵 Excesiva</label>
+    </div>
+    <span class="lbl-p">Para la próxima semana…</span>
+    <div class="checks opciones">
+      <label class="chip"><input type="radio" name="carga" value="mas"> ⬆️ Más carga</label>
+      <label class="chip"><input type="radio" name="carga" value="igual"> ➡️ Igual</label>
+      <label class="chip"><input type="radio" name="carga" value="menos"> ⬇️ Menos carga</label>
+    </div>
+    <label class="chip chip-sw"><input type="checkbox" name="molestias"> ⚠️ Tengo alguna molestia o lesión</label>
+    <label>¿Dónde y cómo? <input name="molestiasTxt" placeholder="Ej.: gemelo derecho, molesta al bajar"></label>
+    <label>Comentario <textarea name="texto" rows="2" placeholder="Lo que quieras contarle a tu entrenador"></textarea></label>
+    <div class="acciones fila"><span class="sp"></span><button value="cancelar" class="btn sec mini" formnovalidate>Cancelar</button><button value="guardar" class="btn pri mini">Enviar</button></div>
+  </form>
+</dialog>
+
+<!-- Proponer carrera -->
+<dialog id="dlg-prop" class="hoja">
+  <form method="dialog" id="f-prop">
+    <h3>Proponer una carrera</h3>
+    <p class="small">Tu entrenador la revisa, le pone prioridad y adapta tus entrenos.</p>
+    <label>Nombre <input name="nombre" placeholder="Ej.: 10K Coruña"></label>
+    <div class="g2">
+      <label>Fecha <input name="fecha" type="date"></label>
+      <label>Distancia <select name="prueba"><option value="5k">5 km</option><option value="10k" selected>10 km</option><option value="media">Media maratón</option><option value="maraton">Maratón</option><option value="otra">Otra a pie</option><option value="ciclismo">Bici</option><option value="triatlon">Triatlón</option></select></label>
+      <label>Lugar <input name="lugar"></label>
+      <label>Objetivo <input name="objetivo" placeholder="Ej.: bajar de 45:00"></label>
+    </div>
+    <label>Web de la carrera <input name="web" type="url" placeholder="opcional"></label>
+    <label>Comentario <input name="texto" placeholder="opcional"></label>
+    <div class="acciones fila"><span class="sp"></span><button value="cancelar" class="btn sec mini" formnovalidate>Cancelar</button><button value="guardar" class="btn pri mini">Enviar</button></div>
+  </form>
+</dialog>
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/ver.js?v=202611141259"></script>
+<script type="module" src="js/ver.js?v=202611141518"></script>
 </body>
 </html>

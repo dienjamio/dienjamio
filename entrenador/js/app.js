@@ -1,9 +1,11 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141259";
-import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141259";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha } from "./vista.js?v=202611141259";
-import * as A from "./almacen.js?v=202611141259";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141259";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141518";
+import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141518";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT } from "./vista.js?v=202611141518";
+import { leerTrack, prevision } from "./carrera.js?v=202611141518";
+import { calcProgreso } from "./progreso.js?v=202611141518";
+import * as A from "./almacen.js?v=202611141518";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141518";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -63,6 +65,7 @@ async function cargarLista() {
   if (!A.nube && !atletas.length) await migrarV1();
   if (A.nube && !atletas.length) await subirLocales();
   atletas.sort((x, y) => x.nombre.localeCompare(y.nombre, "es"));
+  if (A.nube) await Promise.all(atletas.map(async a => { try { a._aportes = await A.listarAportes(a.token); } catch (e) { a._aportes = []; } }));
   $("#aviso-nube").hidden = A.nube;
   $("#aviso-nube").innerHTML = `⚠️ Todavía no está conectada a internet (Firebase): los deportistas se guardan solo en este navegador y <b>sus enlaces no funcionarán</b> hasta conectarla.`;
   pintarLista();
@@ -122,10 +125,17 @@ function pintarLista() {
     return `<button class="tarjeta" data-abrir="${a.id}">
       <span class="ini">${esc(a.nombre.trim().slice(0, 1).toUpperCase())}</span>
       <span class="tx"><b>${esc(a.nombre)}</b><span>${esc(OBJ[a.objetivo] || "")} · ${esc(a.nivel)}</span>
+      ${nuevos(a).length ? `<span class="nuevo">🔔 ${resumenNuevos(a)}</span>` : ""}
       ${prox ? `<span class="prox">🏁 ${esc(prox.nombre || PRUEBAS[prox.prueba])} · ${fechaCorta(prox.fecha)} (${diasEntre(h, prox.fecha)} días)</span>` : `<span class="prox muted">Sin carreras</span>`}</span>
       <span class="flecha">›</span>
     </button>`;
   }).join("")}</div>`;
+}
+
+const nuevos = a => (a._aportes || []).filter(x => !x.visto && !(x.tipo === "carrera" && x.estado && x.estado !== "pendiente"));
+function resumenNuevos(a) {
+  const n = nuevos(a), c = t => n.filter(x => x.tipo === t).length;
+  return [c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
 }
 
 /* =========================================================
@@ -279,15 +289,17 @@ async function actualizarFuturas(a) {
 const enlace = a => new URL(`ver.html?d=${a.token}`, location.href).href;
 async function publicar(a) {
   if (!A.nube || !a) return;
-  const desde = sumaDias(lunesDe(hoy()), -7);
   await asegurarSemanas(a);
-  const semanas = {};
-  Object.keys(a.semanas).filter(l => l >= desde && l <= sumaDias(desde, 35)).forEach(l => { semanas[l] = a.semanas[l]; });
+  const semanas = {}, l0 = lunesDe(hoy());
+  for (const l of [l0, sumaDias(l0, 7)]) if (a.semanas[l]) semanas[l] = a.semanas[l]; // el deportista ve esta semana y la siguiente
   const Z = calcZonas(a);
+  const progreso = calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] });
   try {
     await A.publicar(a, {
       nombre: a.nombre, objetivo: OBJ[a.objetivo], mensaje: a.mensaje || "",
-      carreras: (a.carreras || []).filter(c => c.fecha >= sumaDias(hoy(), -30)).map(({ id, nombre, fecha, prueba, prioridad, objetivo, lugar }) => ({ id, nombre, fecha, prueba, prioridad, objetivo: objetivo || "", lugar: lugar || "" })),
+      carreras: (a.carreras || []).filter(c => c.fecha >= sumaDias(hoy(), -30)).map(c => ({ id: c.id, nombre: c.nombre, fecha: c.fecha, prueba: c.prueba, prioridad: c.prioridad, objetivo: c.objetivo || "", lugar: c.lugar || "", estrategia: c.estrategia || "", ritmoObjetivo: c.ritmoObjetivo || "",
+        track: c.track ? { dist: c.track.dist, sube: c.track.sube, baja: c.track.baja, kms: c.track.kms, perfil: c.track.perfil } : null, prev: prevision(c, Z) })),
+      progreso,
       zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo },
       semanas
     });
@@ -308,6 +320,7 @@ async function abrir(id, mantener = false) {
   const a = atletas.find(x => x.id === id);
   if (!a) return;
   if (actual?.id !== id || !actual.semanas) { a.semanas = await A.cargarSemanas(a); archivos = []; }
+  if (A.nube) { try { a._aportes = await A.listarAportes(a.token); } catch (e) { a._aportes = a._aportes || []; } }
   actual = a;
   if (!mantener) { sub = "semana"; lunesVista = lunesDe(hoy()); }
   await asegurarSemanas(a);
@@ -328,6 +341,7 @@ function pintarAtleta() {
       ${prox ? `<div class="sub">🏁 Próxima: <b>${esc(prox.nombre || PRUEBAS[prox.prueba])}</b> · ${fechaCorta(prox.fecha)} · faltan ${diasEntre(h, prox.fecha)} días</div>` : ""}</div>
       <button class="btn sec mini" data-acc="ficha">✎ Ficha</button>
     </div>
+    ${htmlNovedades(a)}
     <div class="enlace">
       <span class="lbl">Su enlace</span>
       <code>${A.nube ? esc(enlace(a)) : "Disponible al conectar Firebase"}</code>
@@ -357,12 +371,65 @@ function pintarAtleta() {
   if (sub === "semana" || sub === "menu") {
     const snap = a.semanas[lunesVista];
     if (!snap) { el.innerHTML = `<div class="panel vacio"><p>Esta semana no tiene plan.</p><button class="btn pri" data-acc="generar">Generar esta semana</button></div>`; return; }
+    const regs = {};
+    (a._aportes || []).filter(x => x.tipo === "sesion" && x.lunes === lunesVista).forEach(x => { regs[x.sesId] = x; });
     el.innerHTML = sub === "semana"
-      ? htmlCabSemana(snap) + snap.dias.map((_, i) => htmlDia(snap, i, true)).join("")
+      ? htmlValoracion(a, lunesVista) + htmlCabSemana(snap) + snap.dias.map((_, i) => htmlDia(snap, i, true, { regs })).join("")
       : snap.dias.map((_, i) => htmlMenuDia(snap, i, true)).join("") + `<p class="aviso">Menú orientativo calculado según la carga de cada día. No sustituye a un dietista-nutricionista.</p>`;
   } else if (sub === "carreras") pintarCarreras();
+  else if (sub === "plan") pintarPlan();
+  else if (sub === "progreso") el.innerHTML = htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }));
   else if (sub === "datos") pintarDatos();
   else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>${htmlFuentes(a)}`;
+}
+
+/* ---------------- Valoración semanal y ajuste ---------------- */
+const CARGA_PIDE = { mas: "Quiere más carga", igual: "Seguir igual", menos: "Quiere menos carga" };
+function htmlValoracion(a, lunes) {
+  const v = (a._aportes || []).find(x => x.tipo === "semana" && x.lunes === lunes);
+  if (!v) return "";
+  const sig = sumaDias(lunes, 7), aj = a.ajustes?.[sig];
+  const sugerido = v.molestias || v.sensacion === "excesiva" || v.carga === "menos" ? 0.85 : (v.sensacion === "muy_facil" || v.sensacion === "facil") && v.carga === "mas" ? 1.1 : 1;
+  const b = (f, t) => `<button class="btn ${aj === f ? "pri" : "sec"} mini" data-acc="ajuste" data-f="${f}">${t}${f === sugerido ? " ★" : ""}</button>`;
+  return `<article class="dia valoracion">
+    <div class="dia-cab"><h3>📝 Su valoración de la semana</h3><span class="carga ${v.sensacion === "excesiva" || v.sensacion === "dura" ? "alta" : v.sensacion === "bien" ? "media" : "baja"}">${SENS_TXT[v.sensacion] || "—"}</span></div>
+    <p>${CARGA_PIDE[v.carga] || ""}${v.molestias ? ` · <b class="txt-alerta">⚠️ Molestias${v.molestiasTxt ? `: ${esc(v.molestiasTxt)}` : ""}</b>` : ""}</p>
+    ${v.texto ? `<p>“${esc(v.texto)}”</p>` : ""}
+    <div class="fila"><span class="small">Semana siguiente:</span>${b(0.85, "−15 %")}${b(1, "Igual")}${b(1.1, "+10 %")}</div>
+    <small>★ = lo que sugiere su valoración. Al elegir, se rehace la semana siguiente (si no la has cambiado a mano).${v.molestias ? " Con molestias, valora también cambiar sesiones a bici, natación o descanso." : ""}</small>
+  </article>`;
+}
+
+/* ---------------- Plan a 12 semanas ---------------- */
+function pintarPlan() {
+  const a = actual, l0 = lunesDe(hoy());
+  const filas = [];
+  for (let i = 0; i < 12; i++) {
+    const l = sumaDias(l0, 7 * i), s = a.semanas[l];
+    const cs = (a.carreras || []).filter(c => c.fecha >= l && c.fecha <= sumaDias(l, 6));
+    const claves = s ? s.dias.flatMap(d => d.ses).filter(x => ["largo", "calidad", "competicion", "transicion"].includes(x.tipo)).map(x => x.t).slice(0, 3).join(" · ") : "";
+    filas.push(`<tr class="${i < 2 ? "visible" : ""}"><td><button class="link" data-acc="ir-semana" data-l="${l}">${rangoSemana(l)}</button>${i < 2 ? ' <span class="badge-vis" title="La ve el deportista">👁️</span>' : ""}</td>
+      <td>${s ? esc(s.fase.n) : "—"}${s?.editada ? " ✎" : ""}${a.ajustes?.[l] && a.ajustes[l] !== 1 ? ` <small>(${a.ajustes[l] > 1 ? "+" : "−"}${Math.round(Math.abs(a.ajustes[l] - 1) * 100)} %)</small>` : ""}</td>
+      <td>${s ? fmtMin(s.total) : "—"}</td><td class="small">${cs.map(c => `🏁 ${esc(c.nombre)} (${c.prioridad})`).join(" ")}${cs.length && claves ? "<br>" : ""}${esc(claves)}</td></tr>`);
+  }
+  const faltan = Array.from({ length: 12 }, (_, i) => sumaDias(l0, 7 * i)).filter(l => !a.semanas[l]).length;
+  $("#sub").innerHTML = `<article class="dia plan12">
+    <div class="dia-cab"><h3>Plan a 12 semanas</h3>${faltan ? `<button class="btn pri mini" data-acc="generar-12">Generar las ${faltan} que faltan</button>` : ""}</div>
+    <p class="ayuda">Tu previsión completa. El deportista solo ve las dos primeras (👁️): esta semana y la siguiente. Pulsa una semana para verla o cambiarla.</p>
+    <div class="wrap"><table class="acts"><tr><th>Semana</th><th>Fase</th><th>Tiempo</th><th>Claves</th></tr>${filas.join("")}</table></div>
+  </article>`;
+}
+
+/* ---------------- Novedades del deportista ---------------- */
+function htmlNovedades(a) {
+  const n = nuevos(a);
+  if (!n.length) return "";
+  const lin = n.sort((x, y) => (y.cuando || "").localeCompare(x.cuando || "")).slice(0, 6).map(x => {
+    if (x.tipo === "sesion") return `<li>✅ Registró un entreno (${esc(x.dia != null ? DIAS[x.dia] : "")} ${x.lunes ? fechaCorta(sumaDias(x.lunes, x.dia || 0)) : ""})${x.texto ? `: “${esc(x.texto.slice(0, 80))}”` : ""}</li>`;
+    if (x.tipo === "semana") return `<li>📝 Valoró la semana del ${fechaCorta(x.lunes)}: <b>${SENS_TXT[x.sensacion] || "—"}</b>${x.molestias ? " · ⚠️ molestias" : ""}</li>`;
+    return `<li>🏁 Propone la carrera <b>${esc(x.nombre)}</b> (${fechaCorta(x.fecha)}) → mírala en «Carreras»</li>`;
+  }).join("");
+  return `<div class="novedades"><div class="nov-cab"><b>🔔 Novedades</b><button class="btn sec mini" data-acc="visto">Marcar como visto</button></div><ul>${lin}</ul></div>`;
 }
 
 /* ---------------- De dónde sale cada dato ---------------- */
@@ -391,9 +458,8 @@ function htmlFuentes(a) {
     <ul class="usa">
       <li><b>Gasto en reposo</b>: ${b.toLocaleString("es-ES")} kcal (fórmula Mifflin-St Jeor con ${a.peso} kg, ${a.altura} cm, ${a.edad} años, ${a.sexo === "m" ? "mujer" : "hombre"}), × 1,35 por la vida diaria.</li>
       <li><b>+ Cada entreno</b>: según deporte, intensidad, minutos y peso${ajuste}.</li>
-      <li><b>Hidratos</b> según la carga del día: descanso 3 g/kg · baja 4 · media 5,5 · alta 7 (y +1 la víspera de un día duro).</li>
-      <li><b>Proteína</b> ${a.objetivo === "bajar_peso" || a.objetivo === "musculo" ? "2" : "1,7"} g/kg · <b>grasa</b> el resto (entre 0,8 y 1,3 g/kg).</li>
-      <li>Los platos se reparten por comidas y las cantidades se ajustan para cuadrar esos números${a.dieta !== "omni" ? `, con dieta ${a.dieta === "veg" ? "vegetariana" : "vegana"}` : ""}${a.sinGluten ? ", sin gluten" : ""}${a.sinLactosa ? ", sin lactosa" : ""}.</li>
+      <li><b>Ración de hidratos</b> según la carga del día: pequeña en descanso y días suaves, normal en días medios y grande en días duros o la víspera de uno.</li>
+      <li>El menú es <b>orientativo</b>: primero y segundo con su guarnición, rotando platos durante la semana${a.dieta !== "omni" ? `, con dieta ${a.dieta === "veg" ? "vegetariana" : "vegana"}` : ""}${a.sinGluten ? ", sin gluten" : ""}${a.sinLactosa ? ", sin lactosa" : ""}. Las kcal son solo una referencia.</li>
     </ul></article>`;
 }
 
@@ -401,20 +467,31 @@ function htmlFuentes(a) {
 function pintarCarreras() {
   const cs = (actual.carreras || []).slice().sort((x, y) => x.fecha.localeCompare(y.fecha));
   const fut = cs.filter(c => c.fecha >= hoy()), pas = cs.filter(c => c.fecha < hoy()).reverse();
-  $("#sub").innerHTML = `<article class="dia">
+  const Z = calcZonas(actual);
+  const props = (actual._aportes || []).filter(x => x.tipo === "carrera" && (!x.estado || x.estado === "pendiente"));
+  const ficha = c => { const p = prevision(c, Z); return htmlCarreraFicha(c, true, p) + (c.fecha >= hoy() ? `<details class="prev-det"><summary>Previsión kilómetro a kilómetro${c.track ? "" : " (sube el track para afinarla)"}</summary>${htmlPrevision(c, p)}</details>` : ""); };
+  $("#sub").innerHTML = `${props.length ? `<article class="dia propuestas"><div class="dia-cab"><h3>🔔 Carreras que propone</h3></div>
+    ${props.map(x => `<div class="propuesta"><div><b>${esc(x.nombre)}</b><span class="small"> · ${fechaCorta(x.fecha)} · ${esc(PRUEBAS[x.prueba] || x.prueba || "")}${x.lugar ? " · " + esc(x.lugar) : ""}</span>${x.texto ? `<p class="small">“${esc(x.texto)}”</p>` : ""}${x.web ? `<a class="small" href="${esc(x.web)}" target="_blank" rel="noopener">Web de la carrera</a>` : ""}</div>
+      <div class="fila"><select data-prio="${x.id}"><option value="A">A · Principal</option><option value="B">B · Importante</option><option value="C" selected>C · Preparación</option></select>
+      <button class="btn pri mini" data-acc="aceptar-carrera" data-id="${x.id}">Aceptar</button><button class="btn peligro mini" data-acc="descartar-carrera" data-id="${x.id}">Descartar</button></div></div>`).join("")}
+  </article>` : ""}
+  <article class="dia">
     <div class="dia-cab"><h3>Carreras</h3><button class="btn pri mini" data-acc="nueva-carrera">＋ Añadir carrera</button></div>
-    <p class="ayuda">Al guardar una carrera, las semanas que no has cambiado a mano se rehacen solas: fases hacia la carrera A, puesta a punto y ajustes alrededor de las B y C.</p>
-    ${fut.length ? fut.map(c => htmlCarreraFicha(c, true)).join("") : `<p class="muted">Sin carreras próximas.</p>`}
+    <p class="ayuda">Al guardar una carrera, las semanas que no has cambiado a mano se rehacen solas. Sube el <b>track (GPX)</b> del recorrido en cada carrera para tener la previsión kilómetro a kilómetro; el deportista la ve en su enlace.</p>
+    ${fut.length ? fut.map(ficha).join("") : `<p class="muted">Sin carreras próximas.</p>`}
     ${pas.length ? `<h4 class="sep">Pasadas</h4>${pas.map(c => htmlCarreraFicha(c, true)).join("")}` : ""}
   </article>`;
 }
-let carEdit = null;
+let carEdit = null, trackNuevo;
 function abrirCarrera(id) {
   carEdit = id ? actual.carreras.find(c => c.id === id) : null;
   const f = $("#f-car");
   f.reset();
   const c = carEdit || { prueba: ["5k", "10k", "media", "maraton", "ciclismo", "triatlon"].includes(actual.objetivo) ? actual.objetivo : "10k", prioridad: (actual.carreras || []).some(x => x.prioridad === "A" && x.fecha >= hoy()) ? "B" : "A" };
-  for (const k of ["nombre", "fecha", "prueba", "prioridad", "objetivo", "lugar"]) f.elements[k].value = c[k] || "";
+  for (const k of ["nombre", "fecha", "prueba", "prioridad", "objetivo", "lugar", "ritmoObjetivo", "estrategia"]) f.elements[k].value = c[k] || "";
+  trackNuevo = undefined;
+  $("#track-info").textContent = c.track ? `Track: ${(c.track.dist / 1000).toFixed(2).replace(".", ",")} km · +${c.track.sube} m / −${c.track.baja} m${c.track.conAltura ? "" : " (sin altura)"}` : "Sin track";
+  $("#quitar-track").hidden = !c.track;
   $("#car-borrar").hidden = !carEdit;
   $("#dlg-car").returnValue = "";
   $("#dlg-car").showModal();
@@ -424,7 +501,9 @@ async function cerrarCarrera(accion) {
   if (!["guardar", "borrar"].includes(accion)) return;
   if (accion === "borrar") { if (!confirm("¿Borrar esta carrera?")) return; actual.carreras = actual.carreras.filter(c => c !== carEdit); }
   else {
-    const d = Object.fromEntries(["nombre", "fecha", "prueba", "prioridad", "objetivo", "lugar"].map(k => [k, f.elements[k].value.trim()]));
+    const d = Object.fromEntries(["nombre", "fecha", "prueba", "prioridad", "objetivo", "lugar", "ritmoObjetivo", "estrategia"].map(k => [k, f.elements[k].value.trim()]));
+    if (d.ritmoObjetivo && !parseTiempo(d.ritmoObjetivo)) return toast("El ritmo objetivo va como m:ss (por ejemplo 4:30).");
+    if (trackNuevo !== undefined) d.track = trackNuevo;
     if (!d.nombre || !d.fecha) return toast("La carrera necesita nombre y fecha.");
     if (carEdit) Object.assign(carEdit, d); else (actual.carreras = actual.carreras || []).push({ id: uid(8), ...d });
   }
@@ -726,6 +805,37 @@ function enlazar() {
       snap.dias[i].menuVar = (snap.dias[i].menuVar || 0) + 1;
       recalcular(a, snap, i); await A.guardarSemana(a, snap); await publicar(a); return pintarAtleta();
     }
+    if (acc === "visto") {
+      for (const x of nuevos(a)) { x.visto = true; try { await A.marcarAporte(a.token, x.id, { visto: true }); } catch (e) { } }
+      pintarLista(); return pintarAtleta();
+    }
+    if (acc === "ajuste") {
+      const sig = sumaDias(lunesVista, 7), f = +t.dataset.f;
+      a.ajustes = { ...(a.ajustes || {}), [sig]: f };
+      await A.guardarFicha(a);
+      if (!a.semanas[sig]?.editada) { a.semanas[sig] = generarSemana(a, sig); await A.guardarSemana(a, a.semanas[sig]); }
+      await publicar(a);
+      toast(f === 1 ? "La semana siguiente sigue igual" : `Semana siguiente ${f > 1 ? "+10 %" : "−15 %"} de volumen`);
+      return pintarAtleta();
+    }
+    if (acc === "ir-semana") { lunesVista = t.dataset.l; sub = "semana"; return pintarAtleta(); }
+    if (acc === "generar-12") {
+      for (let i = 0; i < 12; i++) { const l = sumaDias(lunesDe(hoy()), 7 * i); if (!a.semanas[l]) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); } }
+      toast("Plan de 12 semanas generado"); return pintarAtleta();
+    }
+    if (acc === "aceptar-carrera" || acc === "descartar-carrera") {
+      const x = (a._aportes || []).find(y => y.id === t.dataset.id);
+      if (!x) return;
+      if (acc === "aceptar-carrera") {
+        (a.carreras = a.carreras || []).push({ id: uid(8), nombre: x.nombre, fecha: x.fecha, prueba: x.prueba || "otra", prioridad: $(`[data-prio="${x.id}"]`).value, objetivo: x.objetivo || "", lugar: x.lugar || "" });
+        await A.guardarFicha(a);
+      }
+      x.estado = acc === "aceptar-carrera" ? "aceptada" : "descartada"; x.visto = true;
+      try { await A.marcarAporte(a.token, x.id, { estado: x.estado, visto: true }); } catch (e) { }
+      const r = acc === "aceptar-carrera" ? await actualizarFuturas(a) : "Carrera descartada";
+      await publicar(a); toast(r); pintarLista(); return pintarAtleta();
+    }
+    if (acc === "ver-img") { const src = t.querySelector("img")?.src; const w = window.open(); if (w && src) w.document.write(`<title>Captura</title><img src="${src}" style="max-width:100%">`); return; }
     if (acc === "nueva-carrera") return abrirCarrera(null);
     if (acc === "editar-carrera") return abrirCarrera(t.dataset.id);
     if (acc === "copiar-enlace") { try { await navigator.clipboard.writeText(enlace(a)); toast("Enlace copiado. Mándaselo una vez: siempre verá lo último."); } catch (e) { prompt("Copia el enlace:", enlace(a)); } return; }
@@ -768,6 +878,16 @@ function enlazar() {
   });
   $("#dlg-ses").addEventListener("close", () => cerrarSesion($("#dlg-ses").returnValue));
   $("#dlg-car").addEventListener("close", () => cerrarCarrera($("#dlg-car").returnValue));
+  $("#f-track").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      trackNuevo = leerTrack(await f.text());
+      $("#track-info").textContent = `✅ ${f.name}: ${(trackNuevo.dist / 1000).toFixed(2).replace(".", ",")} km · +${trackNuevo.sube} m / −${trackNuevo.baja} m${trackNuevo.conAltura ? "" : " (el archivo no trae altura: previsión en llano)"}`;
+      $("#quitar-track").hidden = false;
+    } catch (err) { $("#track-info").textContent = "⚠️ " + err.message; }
+  });
+  $("#quitar-track").addEventListener("click", () => { trackNuevo = null; $("#track-info").textContent = "Sin track"; $("#quitar-track").hidden = true; });
 }
 
 document.addEventListener("DOMContentLoaded", init);

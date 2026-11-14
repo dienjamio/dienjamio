@@ -1,6 +1,6 @@
 /* Lectura de archivos de actividad: FIT, GPX, TCX y CSV (Garmin Connect / Strava).
    Todo se procesa en el navegador; solo se guarda el resumen de cada actividad. */
-import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141259";
+import { iso, parseTiempo, sumaDias, lunesDe, hoy } from "./util.js?v=202611141518";
 
 const DISTANCIAS = { "1k": 1000, "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 

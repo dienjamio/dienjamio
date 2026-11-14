@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141259";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141518";
 
 /* =========================================================
    Catálogos
@@ -409,6 +409,7 @@ function duraciones(a, semana, F, ctx, Z) {
   const fijos = todas.filter(s => s.min != null && s.tipo !== "competicion").reduce((t, s) => t + s.min, 0);
   const disponible = [0, 1, 2, 3, 4, 5, 6].reduce((t, d) => t + (dispDia(a, d).on ? Math.min(maxDia(a, d), 240) : 0), 0);
   const hist = volumenHistorial(a, ctx.lunes);
+  const aj = +(a.ajustes?.[ctx.lunes]) || 1; // ajuste decidido por el entrenador tras la valoración del deportista
   const horas = +a.horas > 0 ? a.horas * 60 : disponible * 0.8;
   // la fuerza nueva cuenta a medias dentro de la progresión (+10 %) sobre lo que ya hacía
   const E = hist != null ? Math.max(Math.min(hist - fijos * 0.5, disponible * 0.85) * vol, resis.length * 20) : Math.max(horas * vol - fijos, resis.length * 25);
@@ -426,7 +427,7 @@ function duraciones(a, semana, F, ctx, Z) {
       libres = sig;
     }
   };
-  asignar(resis, E);
+  asignar(resis, E * aj);
   // con historial, la tirada larga no baja de lo que ya hace (y crece poco a poco)
   if (a.hist?.largoRun && !F.descarga && !["puesta", "carrera"].includes(F.f)) {
     const w = clamp(Math.floor(diasEntre(lunesDe(a.hist.fecha), ctx.lunes) / 7), 0, 12);
@@ -724,136 +725,83 @@ export function cargaDia(ses, objetivo) {
 }
 export const CARGA_TXT = { descanso: "Descanso", baja: "Carga baja", media: "Carga media", alta: "Carga alta" };
 
-const PROT = {
-  carne: { omni: ["Pechuga de pollo o pavo", 23, "pollo"], veg: ["Tofu firme", 13, "tofu"], vegan: ["Tofu firme", 13, "tofu"] },
-  pescado: { omni: ["Pescado blanco o salmón", 21, "pescado"], veg: ["Huevos", 13, "huevo"], vegan: ["Tempeh", 19, "tempeh"] },
-  picada: { omni: ["Carne picada magra", 20, "carne"], veg: ["Soja texturizada (en seco)", 50, "soja"], vegan: ["Soja texturizada (en seco)", 50, "soja"] },
-  lacteo: { omni: ["Yogur griego natural o skyr", 10, "yogur", "L"], veg: ["Yogur griego natural o skyr", 10, "yogur", "L"], vegan: ["Yogur de soja natural", 4.5, "yogur de soja"] },
-  huevo: { omni: ["Huevos", 13, "huevo"], veg: ["Huevos", 13, "huevo"], vegan: ["Tofu firme", 13, "tofu"] },
-  fiambre: { omni: ["Pavo o jamón serrano", 22, "pavo"], veg: ["Queso fresco o de Burgos", 11, "queso fresco", "L"], vegan: ["Hummus", 7, "hummus"] },
-  atun: { omni: ["Atún al natural", 25, "atún"], veg: ["Huevo cocido", 13, "huevo"], vegan: ["Garbanzos cocidos", 8, "garbanzos"] },
-  legumbre: { omni: ["Garbanzos cocidos", 8, "garbanzos"], veg: ["Garbanzos cocidos", 8, "garbanzos"], vegan: ["Garbanzos cocidos", 8, "garbanzos"] }
+/* ---------- Menú orientativo: primero y segundo, sin gramos ---------- */
+// d: dietas en que vale (o = omnívora, v = vegetariana, x = vegana); h: rico en hidratos
+const PRIMEROS = [
+  { n: "Ensalada mixta", d: "ovx" }, { n: "Verduras salteadas", d: "ovx" }, { n: "Crema de calabaza", d: "ovx" },
+  { n: "Judías verdes con patata", d: "ovx", h: 1 }, { n: "Menestra de verduras", d: "ovx" }, { n: "Gazpacho o salmorejo", d: "ovx" },
+  { n: "Lentejas estofadas con verduras", d: "ovx", h: 1 }, { n: "Garbanzos con espinacas", d: "ovx", h: 1 }, { n: "Alubias con verduras", d: "ovx", h: 1 },
+  { n: "Pasta con tomate y verduras", d: "ovx", h: 1, g: 1 }, { n: "Arroz con verduras", d: "ovx", h: 1 }, { n: "Paella de verduras", d: "ovx", h: 1 },
+  { n: "Sopa de fideos", d: "ovx", h: 1, g: 1 }, { n: "Ensalada de pasta", d: "ovx", h: 1, g: 1 }, { n: "Crema de verduras", d: "ovx" },
+  { n: "Pisto con huevo", d: "ov" }, { n: "Ensalada de quinoa", d: "ovx", h: 1 }, { n: "Brócoli con patata", d: "ovx", h: 1 }
+];
+const SEGUNDOS = [
+  { o: "Pescado blanco a la plancha", v: "Tortilla francesa", x: "Tofu a la plancha" },
+  { o: "Salmón al horno", v: "Huevos revueltos con champiñones", x: "Tempeh a la plancha" },
+  { o: "Pechuga de pollo a la plancha", v: "Hamburguesa de legumbres", x: "Hamburguesa de legumbres" },
+  { o: "Merluza en salsa verde", v: "Revuelto de verduras", x: "Revuelto de tofu y verduras" },
+  { o: "Pavo al horno", v: "Queso fresco a la plancha", x: "Seitán a la plancha" },
+  { o: "Ternera a la plancha", v: "Tortilla de patata", x: "Albóndigas de soja" },
+  { o: "Atún o caballa a la plancha", v: "Huevos al plato", x: "Garbanzos especiados" },
+  { o: "Calamares o sepia a la plancha", v: "Tofu salteado", x: "Tofu salteado" },
+  { o: "Pollo al curry suave", v: "Curry de garbanzos", x: "Curry de garbanzos" },
+  { o: "Lomo a la plancha", v: "Berenjena rellena de queso", x: "Berenjena rellena de soja" }
+];
+const DESAYUNOS = {
+  o: ["Tostadas con tomate, aceite y jamón + fruta", "Yogur con avena, fruta y frutos secos", "Café con leche, tostada con aguacate y huevo", "Porridge de avena con plátano"],
+  v: ["Tostadas con tomate, aceite y queso fresco + fruta", "Yogur con avena, fruta y frutos secos", "Café con leche, tostada con aguacate y huevo", "Porridge de avena con plátano"],
+  x: ["Tostadas con tomate, aceite y hummus + fruta", "Yogur de soja con avena, fruta y frutos secos", "Bebida de soja, tostada con aguacate", "Porridge de avena con bebida vegetal y plátano"]
 };
-const LECHE = { omni: "Leche", veg: "Leche", vegan: "Bebida de soja" };
-const BANCO = {
-  desayuno: [
-    { n: "Porridge de avena con plátano y nueces", c: [["Copos de avena", 60, "G"]], p: "lacteo", f: ["{leche} 200 ml", "1 plátano", "Nueces 15 g", "Canela"] },
-    { n: "Tostadas con tomate, aceite y {p}", c: [["Pan integral", 45, "G"]], p: "huevo", f: ["Tomate rallado", "Aceite de oliva 1 cucharada", "1 pieza de fruta"] },
-    { n: "Bol de {p} con muesli y frutos rojos", c: [["Muesli sin azúcar", 62, "G"]], p: "lacteo", f: ["Frutos rojos 100 g", "Semillas de chía 1 cucharada"] },
-    { n: "Tostada de aguacate con {p}", c: [["Pan de centeno o integral", 45, "G"]], p: "fiambre", f: ["½ aguacate", "Zumo de naranja natural"] },
-    { n: "Tortitas de avena y plátano con {p}", c: [["Harina de avena", 60, "G"]], p: "lacteo", f: ["1 plátano", "Crema de cacahuete 1 cucharada"] },
-    { n: "Café con leche, tostada y fruta con {p}", c: [["Pan integral", 45, "G"]], p: "fiambre", f: ["{leche} 200 ml", "Aceite de oliva", "1 kiwi o naranja"] },
-    { n: "Batido de avena, plátano y cacao", c: [["Copos de avena", 60, "G"]], p: "lacteo", f: ["{leche} 250 ml", "1 plátano", "Cacao puro 1 cucharadita"] }
-  ],
-  almuerzo: [
-    { n: "Fruta y frutos secos", c: [["Plátano o fruta de temporada", 20]], f: ["Almendras o nueces 20 g"] },
-    { n: "Bocadillo pequeño de {p}", c: [["Pan integral", 45, "G"]], p: "fiambre", f: ["Tomate"] },
-    { n: "{p} con fruta", c: [["Fruta troceada", 13]], p: "lacteo", f: ["Nueces 10 g"] },
-    { n: "Tortitas de arroz con crema de cacahuete", c: [["Tortitas de arroz", 80]], f: ["Crema de cacahuete 15 g", "1 mandarina"] },
-    { n: "Dátiles y {p}", c: [["Dátiles", 66]], p: "lacteo", f: [] }
-  ],
-  comida: [
-    { n: "Arroz salteado con {p} y verduras", c: [["Arroz (peso en crudo)", 78]], p: "carne", f: ["Verduras salteadas (pimiento, calabacín, cebolla)", "Aceite de oliva 1 cucharada", "Fruta de postre"] },
-    { n: "Pasta integral boloñesa ({p})", c: [["Pasta integral (en crudo)", 65, "G"]], p: "picada", f: ["Tomate triturado y cebolla", "Ensalada verde", "Aceite de oliva 1 cucharada"] },
-    { n: "Lentejas estofadas con verduras y {p}", c: [["Lentejas (en crudo)", 50], ["Pan integral", 45, "G"]], p: "huevo", f: ["Zanahoria, pimiento y cebolla", "Fruta de postre"] },
-    { n: "Patata asada con {p} y ensalada", c: [["Patata", 17]], p: "pescado", f: ["Ensalada de tomate y lechuga", "Aceite de oliva 1 cucharada", "Yogur o fruta"] },
-    { n: "Quinoa con garbanzos y verduras asadas", c: [["Quinoa (en crudo)", 64]], p: "legumbre", f: ["Berenjena, calabacín y pimiento asados", "Aceite de oliva", "Fruta de postre"] },
-    { n: "Paella de {p} y verduras", c: [["Arroz (peso en crudo)", 78]], p: "pescado", f: ["Judías verdes, pimiento, tomate", "Aceite de oliva 1 cucharada", "Ensalada"] },
-    { n: "Cuscús con {p} y verduras", c: [["Cuscús (en crudo)", 72, "G"]], p: "carne", f: ["Calabacín, zanahoria y cebolla", "Pasas y especias", "Fruta de postre"] }
-  ],
-  merienda: [
-    { n: "{p} con avena y miel", c: [["Copos de avena", 60, "G"]], p: "lacteo", f: ["Miel 1 cucharadita"] },
-    { n: "Tostada con {p} y fruta", c: [["Pan integral", 45, "G"]], p: "fiambre", f: ["1 pieza de fruta"] },
-    { n: "Batido recuperador de plátano", c: [["Plátano", 20]], p: "lacteo", f: ["{leche} 250 ml", "Cacao puro 1 cucharadita"] },
-    { n: "Fruta y frutos secos", c: [["Fruta de temporada", 13]], f: ["Frutos secos 20 g"] },
-    { n: "Tortitas de maíz con {p}", c: [["Tortitas de maíz", 80]], p: "fiambre", f: ["Tomate en rodajas"] }
-  ],
-  cena: [
-    { n: "Revuelto de verduras con {p} y pan", c: [["Pan integral", 45, "G"]], p: "huevo", f: ["Espinacas, champiñones y cebolla", "Aceite de oliva 1 cucharada"] },
-    { n: "{p} al horno con patata y verduras", c: [["Patata", 17]], p: "pescado", f: ["Brócoli o judías verdes", "Aceite de oliva 1 cucharada"] },
-    { n: "Crema de verduras y {p} a la plancha", c: [["Pan integral", 45, "G"]], p: "carne", f: ["Crema de calabaza o calabacín", "Yogur o fruta"] },
-    { n: "Ensalada completa con {p} y legumbre", c: [["Garbanzos o lentejas cocidos", 18]], p: "atun", f: ["Lechuga, tomate, pepino, maíz", "Aceite de oliva 1 cucharada", "Nueces 10 g"] },
-    { n: "Wok de {p} con verduras y fideos de arroz", c: [["Fideos de arroz (en crudo)", 80]], p: "carne", f: ["Brócoli, zanahoria, pimiento", "Salsa de soja"] },
-    { n: "Boniato asado con {p} y ensalada", c: [["Boniato", 20]], p: "pescado", f: ["Ensalada verde", "Aceite de oliva 1 cucharada"] },
-    { n: "Tortilla de patata y verduras con ensalada", c: [["Patata", 17]], p: "huevo", f: ["Cebolla y calabacín", "Ensalada de tomate", "Aceite de oliva"] }
-  ]
+const PICOTEO = {
+  o: ["Fruta y un puñado de frutos secos", "Yogur con fruta", "Bocadillo pequeño de pavo", "Tostada con queso fresco"],
+  v: ["Fruta y un puñado de frutos secos", "Yogur con fruta", "Bocadillo pequeño de queso", "Tostada con hummus"],
+  x: ["Fruta y un puñado de frutos secos", "Yogur de soja con fruta", "Bocadillo pequeño de hummus", "Tortitas de arroz con crema de cacahuete"]
 };
-const SLOTS = {
-  5: [["desayuno", "Desayuno", 0.25], ["almuerzo", "Media mañana", 0.10], ["comida", "Comida", 0.30], ["merienda", "Merienda", 0.15], ["cena", "Cena", 0.20]],
-  4: [["desayuno", "Desayuno", 0.25], ["comida", "Comida", 0.35], ["merienda", "Merienda", 0.15], ["cena", "Cena", 0.25]],
-  3: [["desayuno", "Desayuno", 0.30], ["comida", "Comida", 0.40], ["cena", "Cena", 0.30]]
-};
-export const bmr = a => 10 * a.peso + 6.25 * a.altura - 5 * a.edad + (a.sexo === "m" ? -161 : 5);
+const SLOTS = { 5: ["Desayuno", "Media mañana", "Comida", "Merienda", "Cena"], 4: ["Desayuno", "Comida", "Merienda", "Cena"], 3: ["Desayuno", "Comida", "Cena"] };
+const bmr_ = a => 10 * a.peso + 6.25 * a.altura - 5 * a.edad + (a.sexo === "m" ? -161 : 5);
+export const bmr = bmr_;
 const hashTxt = t => [...String(t)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7);
+const barajar = (arr, rand) => { const b = arr.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 
 export function menuDia(a, ses, carga, cargaSig, semilla) {
   const rand = rng(semilla);
   const kg = +a.peso || 70;
+  const dieta = { omni: "o", veg: "v", vegan: "x" }[a.dieta] || "o";
   const bajar = a.objetivo === "bajar_peso" && carga !== "alta" && !ses.some(s => s.tipo === "competicion");
   const musc = a.objetivo === "musculo";
   const ejercicio = ses.reduce((t, s) => t + (MET[s.dep]?.[s.tipo] ?? 6) * kg * (+s.min || 0) / 60, 0);
-  let kcal = bmr(a) * 1.35 + ejercicio * 0.9;
+  let kcal = bmr_(a) * 1.35 + ejercicio * 0.9;
   if (bajar) kcal *= 0.82;
   if (musc) kcal *= 1.1;
-  let chKg = { descanso: 3, baja: 4, media: 5.5, alta: 7 }[carga];
-  if (cargaSig === "alta" && carga !== "alta") chKg += 1;
-  if (bajar) chKg = Math.max(2.5, chKg - 1.2);
-  if (musc) chKg = Math.max(chKg, 4);
-  const P = Math.round(kg * (bajar || musc ? 2.0 : 1.7));
-  let C = Math.round(kg * chKg);
-  let G = Math.round((kcal - 4 * P - 4 * C) / 9);
-  const gMin = Math.round(kg * 0.8), gMax = Math.round(kg * 1.3);
-  if (G < gMin) G = gMin;
-  if (G > gMax) { G = gMax; C = Math.round(clamp((kcal - 4 * P - 9 * G) / 4, C, kg * 10)); }
-  kcal = 4 * P + 4 * C + 9 * G;
-
-  const slots = SLOTS[a.comidas] || SLOTS[5];
-  const comidas = slots.map(([k, nombre, share]) => {
-    const banco = BANCO[k];
-    const plato = banco[Math.floor(rand() * banco.length)];
-    return { nombre, kcal: Math.round(kcal * share), ...platoTxt(plato, a, C * share, P * share) };
+  const sg = t => a.sinGluten ? t.replace(/^Pasta/, "Pasta sin gluten").replace(/^Sopa de fideos/, "Sopa de fideos de arroz").replace(/Tostadas?/, m => m + " de pan sin gluten").replace(/Bocadillo pequeño/, "Bocadillo pequeño (pan sin gluten)") : t;
+  const sl = t => a.sinLactosa && dieta !== "x" ? t.replace(/Yogur/, "Yogur sin lactosa").replace(/Café con leche/, "Café con leche sin lactosa").replace(/queso fresco/i, "queso fresco sin lactosa") : t;
+  const fix = t => sl(sg(t));
+  // ración de hidratos según el día
+  const racion = carga === "alta" || cargaSig === "alta" ? "grande" : carga === "media" ? "normal" : bajar ? "pequeña o ninguna" : "pequeña";
+  const guarnicion = carga === "alta" ? "con buena ración de arroz o patatas" : carga === "media" ? "con una ración de patatas, arroz o pan" : "con ensalada o verduras";
+  const cenaGuar = cargaSig === "alta" ? "con arroz, patata o pan (mañana toca día duro)" : carga === "descanso" || bajar ? "con verduras" : "con verduras y un poco de pan";
+  const prim = barajar(PRIMEROS.filter(p => p.d.includes(dieta)), rand);
+  const hc = prim.filter(p => p.h), ligeros = prim.filter(p => !p.h);
+  const seg = barajar(SEGUNDOS, rand);
+  const comidas = (SLOTS[a.comidas] || SLOTS[5]).map(nombre => {
+    if (nombre === "Desayuno") return { nombre, lineas: [fix(DESAYUNOS[dieta][Math.floor(rand() * DESAYUNOS[dieta].length)])] };
+    if (nombre === "Comida") {
+      const p = (carga === "alta" || carga === "media" ? hc : ligeros.concat(hc.filter(x => x.n.includes("Lentejas") || x.n.includes("Garbanzos"))))[0] || prim[0];
+      return { nombre, lineas: [`Primero: ${fix(p.n)}`, `Segundo: ${seg[0][dieta]} ${guarnicion}`, "Postre: fruta o yogur"] };
+    }
+    if (nombre === "Cena") return { nombre, lineas: [`Primero: ${fix(ligeros[1]?.n || prim[1].n)}`, `Segundo: ${seg[1][dieta]} ${cenaGuar}`] };
+    return { nombre, lineas: [fix(PICOTEO[dieta][Math.floor(rand() * PICOTEO[dieta].length)])] };
   });
   const tips = [];
   const reales = ses.filter(s => s.dep !== "movilidad");
-  if (reales.some(s => s.min >= 75 && s.dep !== "fuerza")) tips.push("Durante el entreno largo: 30-60 g de hidratos/hora (90 g si pasa de 2,5 h) y bebida con sales.");
-  if (reales.some(s => DURO.includes(s.tipo))) tips.push("Antes de la sesión clave: comida rica en hidratos 2-3 h antes, baja en grasa y fibra.");
-  if (reales.length) tips.push("Después de entrenar: 20-30 g de proteína + hidratos en la siguiente comida (≤ 2 h).");
-  if (carga === "descanso") tips.push("Día de descanso: prioriza verdura, proteína y dormir 8 h.");
-  if (cargaSig === "alta" && carga !== "alta") tips.push("Mañana toca día duro: cena con buena ración de hidratos.");
+  tips.push(`Hidratos hoy: ración ${racion}.`);
+  if (reales.some(s => s.min >= 75 && s.dep !== "fuerza")) tips.push("En el entreno largo: 30-60 g de hidratos por hora (gel, plátano, dátiles) y bebida con sales.");
+  if (reales.some(s => DURO.includes(s.tipo))) tips.push("Antes de la sesión clave: comida con hidratos 2-3 h antes, ligera y baja en grasa.");
+  if (reales.length) tips.push("Después de entrenar: algo de proteína (yogur, huevo, leche, batido) y fruta.");
+  if (carga === "descanso") tips.push("Día de descanso: verdura, proteína y dormir bien.");
   const agua = Math.round((kg * 0.035 + reales.reduce((t, s) => t + (+s.min || 0), 0) / 60 * 0.6) * 10) / 10;
   tips.push(`Agua: unos ${agua.toLocaleString("es-ES")} litros a lo largo del día.`);
-  return { kcal: Math.round(kcal), P, C, G, comidas, tips };
-}
-
-function platoTxt(plato, a, chMeta, protMeta) {
-  const dieta = a.dieta || "omni";
-  const items = [];
-  let nombreP = "";
-  if (plato.p) {
-    const pr = PROT[plato.p][dieta];
-    nombreP = pr[2];
-    const g = clamp(Math.round(protMeta * 0.75 / (pr[1] / 100) / 5) * 5, 30, plato.p === "lacteo" ? 350 : 250);
-    let nom = pr[0];
-    if (pr[3] === "L" && a.sinLactosa) nom += " sin lactosa";
-    if (nom.startsWith("Huevo")) items.push(`${nom}: ${clamp(Math.round(g / 60), 1, 3)} ud.`);
-    else items.push(`${nom}: ${g} g`);
-  }
-  const nC = plato.c.length;
-  for (const [nom0, ch, glu] of plato.c) {
-    let nom = nom0;
-    if (glu === "G" && a.sinGluten) nom = nom.replace(/^(Copos de avena|Harina de avena)/, "$1 certificada sin gluten").replace(/^Pan( integral| de centeno o integral)?/, "Pan sin gluten").replace(/^Pasta integral/, "Pasta sin gluten").replace(/^Cuscús/, "Quinoa").replace(/^Muesli sin azúcar/, "Muesli sin gluten");
-    const max = ch < 15 ? 300 : ch < 25 ? 450 : 180;
-    items.push(`${nom}: ${clamp(Math.round(chMeta * 0.8 / nC / (ch / 100) / 5) * 5, 15, max)} g`);
-  }
-  for (const f of plato.f) {
-    let t = f.replace("{leche}", LECHE[dieta] + (a.sinLactosa && dieta !== "vegan" ? " sin lactosa" : ""));
-    if (dieta === "vegan") t = t.replace(/^Yogur o fruta$/, "Fruta").replace(/^Miel/, "Sirope de agave");
-    items.push(t);
-  }
-  let n = plato.n.replace("{p}", nombreP);
-  n = n.charAt(0).toUpperCase() + n.slice(1);
-  if (a.sinGluten) n = n.replace("Cuscús", "Quinoa").replace("Pasta integral", "Pasta sin gluten");
-  return { plato: n, items };
+  return { kcal: Math.round(kcal / 50) * 50, comidas, tips, racion };
 }
 
 /* =========================================================

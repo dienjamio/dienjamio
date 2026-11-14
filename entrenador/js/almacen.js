@@ -4,7 +4,7 @@
      entrenadores/{uid}/deportistas/{id}/semanas/{lunes}   plan de cada semana
      entrenadores/{uid}/deportistas/{id}/archivos/{fid}    PDF e informes (hasta ~700 KB)
      publico/{token}                                 lo que ve el deportista con su enlace */
-import { firebaseConfig } from "./firebase-config.js?v=202611141259";
+import { firebaseConfig } from "./firebase-config.js?v=202611141518";
 
 const V = "10.12.2";
 const SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}.js`;
@@ -124,6 +124,28 @@ export async function leerArchivoGuardado(a, id) {
 export async function borrarArchivo(a, id) {
   if (!nube) return idbOp("readwrite", s => s.delete(id));
   await fb.deleteDoc(ref(a.id, "archivos", id));
+}
+
+/* Buzón del deportista: lo que él registra con su enlace (entrenos hechos, valoraciones, carreras propuestas).
+   Vive en publico/{token}/aportes y puede escribirlo quien tenga el enlace. */
+const sinAnidar = o => JSON.parse(JSON.stringify(o));
+export async function listarAportes(token) {
+  if (!nube || !token) return [];
+  await cargarFirebase();
+  const q = await fb.getDocs(fb.collection(db, "publico", token, "aportes"));
+  return q.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function guardarAporte(token, id, datos) {
+  await cargarFirebase();
+  await fb.setDoc(fb.doc(db, "publico", token, "aportes", id), sinAnidar({ ...datos, cuando: new Date().toISOString() }), { merge: true });
+}
+export async function marcarAporte(token, id, cambios) {
+  await cargarFirebase();
+  await fb.setDoc(fb.doc(db, "publico", token, "aportes", id), sinAnidar(cambios), { merge: true });
+}
+export async function borrarAporte(token, id) {
+  await cargarFirebase();
+  await fb.deleteDoc(fb.doc(db, "publico", token, "aportes", id));
 }
 
 /* Lo guardado en este navegador antes de conectar la nube */

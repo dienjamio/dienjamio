@@ -12,13 +12,21 @@ service cloud.firestore {
     match /entrenadores/{uid}/{resto=**} {
       allow read, write: if esEntrenador() && request.auth.uid == uid;
     }
-    // Lo que ve cada deportista con su enlace: cualquiera con el enlace puede leer ese documento,
-    // nadie puede listar los demás, y solo el entrenador que lo creó puede cambiarlo
+    // Lo que ve cada deportista con su enlace: se lee si se conoce el enlace, nadie puede listar
+    // los demás, y solo el entrenador que lo creó puede cambiarlo
     match /publico/{token} {
       allow get: if true;
       allow list: if false;
       allow create: if esEntrenador() && request.resource.data.owner == request.auth.uid;
       allow update, delete: if esEntrenador() && resource.data.owner == request.auth.uid;
+      // Buzón del deportista: entrenos hechos, valoraciones y carreras propuestas.
+      // Solo existe si existe su enlace; las fotos no pueden pasar de ~900 KB.
+      match /aportes/{id} {
+        allow read, delete: if exists(/databases/$(database)/documents/publico/$(token));
+        allow create, update: if exists(/databases/$(database)/documents/publico/$(token))
+          && request.resource.data.tipo in ["sesion", "semana", "carrera"]
+          && (!("img" in request.resource.data) || (request.resource.data.img is string && request.resource.data.img.size() < 900000));
+      }
     }
   }
 }

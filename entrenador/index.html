@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Entrenador personal</title>
+<title>Dienjamio Entrenador</title>
 <meta name="description" content="Planifica los entrenos y el menú semanal de tus deportistas y compártelos con un enlace.">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="../icon-192.png">
-<link rel="apple-touch-icon" href="../icon-192.png">
-<link rel="stylesheet" href="styles.css?v=202611141259">
+<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<link rel="stylesheet" href="styles.css?v=202611141518">
 </head>
 <body>
 <header class="top no-print">
-  <div class="marca"><span class="logo">⚡</span><h1>Entrenador</h1></div>
+  <div class="marca"><img class="logo-img" src="img/logo.svg" alt="" width="44" height="44"><div class="nombre-app"><h1>Dienjamio</h1><span>Entrenador</span></div></div>
   <div class="cuenta" id="cuenta"></div>
 </header>
 
@@ -159,8 +159,10 @@
     <div class="atleta-cab panel no-print" id="atleta-cab"></div>
     <nav class="subtabs no-print" id="subtabs">
       <button data-sub="semana" aria-selected="true">Semana</button>
+      <button data-sub="plan">12 semanas</button>
       <button data-sub="menu">Menú</button>
       <button data-sub="carreras">Carreras</button>
+      <button data-sub="progreso">Progreso</button>
       <button data-sub="datos">Datos</button>
       <button data-sub="zonas">Zonas</button>
     </nav>
@@ -215,6 +217,16 @@
       <label>Objetivo <input name="objetivo" placeholder="Ej.: bajar de 45:00"></label>
     </div>
     <label>Lugar <input name="lugar"></label>
+    <fieldset class="track">
+      <legend>Previsión de carrera</legend>
+      <div class="g2">
+        <label>Ritmo objetivo en llano (/km) <input name="ritmoObjetivo" placeholder="vacío = por sus marcas"></label>
+        <label>Estrategia <select name="estrategia"><option value="">Esfuerzo constante</option><option value="negativa">Ritmo negativo (2.ª mitad más rápida)</option><option value="agresiva">Salida fuerte</option></select></label>
+      </div>
+      <label class="btn sec mini subir-track">📍 Subir track (GPX) <input type="file" id="f-track" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden></label>
+      <span class="small" id="track-info">Sin track</span> <button type="button" class="quita" id="quitar-track" hidden>Quitar track</button>
+      <small>El GPX lo puedes bajar de la web de la carrera, de Strava (ruta o actividad → Exportar GPX) o de Wikiloc.</small>
+    </fieldset>
     <small>La A marca toda la preparación (fases y puesta a punto). B y C se meten en su día y el plan se ajusta alrededor.</small>
     <div class="acciones fila">
       <button value="borrar" class="btn peligro mini" id="car-borrar">Borrar</button>
@@ -226,6 +238,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/app.js?v=202611141259"></script>
+<script type="module" src="js/app.js?v=202611141518"></script>
 </body>
 </html>

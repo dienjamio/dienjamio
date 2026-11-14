@@ -44,3 +44,18 @@ export function toast(t) {
   el.textContent = t; el.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => { el.hidden = true; }, 2600);
 }
+
+/** Reduce una foto o captura (máx. 1100 px, JPEG) para guardarla ligera. Devuelve un dataURL. */
+export async function comprimirImagen(file, max = 1100, calidad = 0.72) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("No se puede leer la imagen")); i.src = url; });
+    const k = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    let q = calidad, d = c.toDataURL("image/jpeg", q);
+    while (d.length > 850000 && q > 0.3) { q -= 0.1; d = c.toDataURL("image/jpeg", q); }
+    return d;
+  } finally { URL.revokeObjectURL(url); }
+}

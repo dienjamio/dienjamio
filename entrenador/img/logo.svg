@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140" role="img" aria-label="Dienjamio Entrenador">
+  <rect width="140" height="140" rx="30" fill="#0B0B0B"/>
+  <g fill="none" stroke="#D7FF1F" stroke-width="7" stroke-linejoin="round">
+    <path d="M43,23 L67,23 A40,42 0 0 1 67,107 L43,107 Z"/>
+    <path d="M55,35 L67,35 A28,30 0 0 1 67,95 L55,95 Z"/>
+    <path d="M67,47 A16,18 0 0 1 67,83 Z"/>
+  </g>
+  <polyline points="29,74 44,74 49,63 55,85 60,74 74,74" fill="none" stroke="#F4F5F0" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
