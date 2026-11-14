@@ -1,12 +1,13 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141819";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141819";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades } from "./vista.js?v=202611141819";
-import { BIBLIO } from "./biblioteca.js?v=202611141819";
-import { leerTrack, prevision } from "./carrera.js?v=202611141819";
-import { calcProgreso } from "./progreso.js?v=202611141819";
-import * as A from "./almacen.js?v=202611141819";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141819";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141826";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141826";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades } from "./vista.js?v=202611141826";
+import { BIBLIO } from "./biblioteca.js?v=202611141826";
+import { leerTrack, prevision } from "./carrera.js?v=202611141826";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141826";
+import { calcProgreso } from "./progreso.js?v=202611141826";
+import * as A from "./almacen.js?v=202611141826";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141826";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -132,6 +133,7 @@ function pintarLista() {
       <span class="ini">${esc(a.nombre.trim().slice(0, 1).toUpperCase())}</span>
       <span class="tx"><b>${esc(a.nombre)}</b><span>${esc(OBJ[a.objetivo] || "")} · ${esc(a.nivel)}</span>
       ${nuevos(a).length ? `<span class="nuevo">🔔 ${resumenNuevos(a)}</span>` : ""}
+      ${htmlAlertas(a)}
       ${A.nube ? (v => v ? `<span class="small">👁️ Entró ${hace(v.ultima)} · ${v.n} visitas</span>` : `<span class="small muted">👁️ Aún no ha abierto su enlace</span>`)(visitas(a)) : ""}
       ${prox ? `<span class="prox">🏁 ${esc(prox.nombre || PRUEBAS[prox.prueba])} · ${fechaCorta(prox.fecha)} (${diasEntre(h, prox.fecha)} días)</span>` : `<span class="prox muted">Sin carreras</span>`}</span>
       <span class="flecha">›</span>
@@ -151,6 +153,30 @@ function htmlVisitas(a) {
   const l = lunesDe(hoy()), estaSemana = (v.dias || []).filter(d => d >= l).length;
   return `<span class="vis ${Date.now() - Date.parse(v.ultima) > 4 * 86400000 ? "frio" : "ok"}">👁️ ${v.n} visita${v.n === 1 ? "" : "s"} · última ${hace(v.ultima)} · ${estaSemana} día${estaSemana === 1 ? "" : "s"} esta semana</span>`;
 }
+/* Alertas de carga y de seguimiento */
+function alertas(a) {
+  const out = [], h = hoy(), l0 = lunesDe(h), sem = a.semanas || {};
+  const tot = l => sem[l]?.total || 0;
+  const prev = [1, 2, 3].map(i => tot(sumaDias(l0, -7 * i))).filter(Boolean);
+  if (tot(l0) && prev.length) { const media = prev.reduce((x, y) => x + y, 0) / prev.length; const sube = Math.round((tot(l0) / media - 1) * 100); if (sube > 15) out.push({ t: `📈 Sube un ${sube} % de carga esta semana`, g: sube > 30 }); }
+  const sig = sumaDias(l0, 7);
+  if (tot(sig) && tot(l0)) { const sube = Math.round((tot(sig) / tot(l0) - 1) * 100); if (sube > 20) out.push({ t: `📈 La semana que viene sube un ${sube} %`, g: false }); }
+  const vals = (a._aportes || []).filter(x => x.tipo === "semana").sort((x, y) => y.lunes.localeCompare(x.lunes));
+  if (vals.length >= 2 && vals.slice(0, 2).every(v => ["dura", "excesiva"].includes(v.sensacion))) out.push({ t: "🥵 Dos semanas seguidas duras", g: true });
+  if (vals[0]?.molestias && vals[0].lunes >= sumaDias(l0, -7)) out.push({ t: `🤕 Molestias${vals[0].molestiasTxt ? ": " + vals[0].molestiasTxt.slice(0, 40) : ""}`, g: true });
+  if (A.nube && Object.keys(sem).length) {
+    const regs = (a._aportes || []).filter(x => x.tipo === "sesion").map(x => sumaDias(x.lunes, x.dia || 0)).sort();
+    const ultimo = regs[regs.length - 1];
+    const dias = ultimo ? diasEntre(ultimo, h) : null;
+    if ((dias == null && diasEntre(a.inicio || l0, h) > 7) || dias > 7) out.push({ t: dias == null ? "📵 Aún no ha registrado ningún entreno" : `📵 ${dias} días sin registrar`, g: dias > 14 });
+    const v = (a._aportes || []).find(x => x.tipo === "visita");
+    if (v && Date.now() - Date.parse(v.ultima) > 5 * 86400000) out.push({ t: `👁️ No entra desde hace ${Math.round((Date.now() - Date.parse(v.ultima)) / 86400000)} días`, g: false });
+  }
+  const p = calcProgreso({ semanas: sem, aportes: a._aportes || [], actividades: a.actividades || [], n: 2 })[0];
+  if (p && p.sesPlan >= 3 && p.sesHechas / p.sesPlan < 0.6) out.push({ t: `📉 La semana pasada cumplió ${p.sesHechas} de ${p.sesPlan}`, g: false });
+  return out;
+}
+const htmlAlertas = a => { const al = alertas(a); return al.length ? `<div class="alertas">${al.map(x => `<span class="alerta-c${x.g ? " grave" : ""}">${esc(x.t)}</span>`).join("")}</div>` : ""; };
 function resumenNuevos(a) {
   const n = nuevos(a), c = t => n.filter(x => x.tipo === t).length;
   return [c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
@@ -294,16 +320,18 @@ async function asegurarSemanas(a, desde = lunesDe(hoy()), n = 2) {
     if (!a.semanas[l]) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); }
   }
 }
-/** Rehace las semanas desde la actual que no tengan cambios a mano. */
+/** Una semana con entrenos ya registrados por el deportista no se rehace sola (se perderían sus registros). */
+const conRegistros = (a, l) => (a._aportes || []).some(x => x.tipo === "sesion" && x.lunes === l);
+/** Rehace las semanas desde la actual que no tengan cambios a mano ni registros del deportista. */
 async function actualizarFuturas(a) {
   const desde = lunesDe(hoy());
   let hechas = 0, manuales = 0;
   for (const l of Object.keys(a.semanas).filter(l => l >= desde)) {
-    if (a.semanas[l].editada) { manuales++; continue; }
+    if (a.semanas[l].editada || conRegistros(a, l)) { manuales++; continue; }
     a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); hechas++;
   }
   await asegurarSemanas(a);
-  return `Guardado. ${hechas ? `Plan actualizado (${hechas} semana${hechas > 1 ? "s" : ""}).` : ""}${manuales ? ` ${manuales} semana${manuales > 1 ? "s" : ""} con cambios a mano no se ha${manuales > 1 ? "n" : ""} tocado: usa «Rehacer semana» si quieres.` : ""}`;
+  return `Guardado. ${hechas ? `Plan actualizado (${hechas} semana${hechas > 1 ? "s" : ""}).` : ""}${manuales ? ` ${manuales} semana${manuales > 1 ? "s" : ""} con cambios a mano o con entrenos ya registrados no se ha${manuales > 1 ? "n" : ""} tocado: usa «Rehacer semana» si quieres.` : ""}`;
 }
 
 /* =========================================================
@@ -352,12 +380,13 @@ async function abrir(id, mantener = false) {
   // las actividades que el deportista sube al registrar entrenos pasan a su historial
   const suyas = (a._aportes || []).filter(x => x.tipo === "sesion" && x.act?.fecha).map(x => ({ ...x.act, id: "dep-" + x.id }));
   if (suyas.length) { const { lista, anadidas } = fusionar(a.actividades || [], suyas); if (anadidas) { a.actividades = lista.slice(0, 1500); await A.guardarFicha(a); } }
+  await procesarTests(a);
   // datos recalculados con los filtros actuales y semanas futuras al día con el generador nuevo
   if (a.actividades?.length || a.medidas?.length) recalcHist(a);
   let rehechas = 0;
   for (const l of Object.keys(a.semanas || {}).filter(l => l >= lunesDe(hoy()))) {
     const s = a.semanas[l];
-    if (!s.editada && s.motor !== MOTOR_V) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); rehechas++; }
+    if (!s.editada && !conRegistros(a, l) && s.motor !== MOTOR_V) { a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); rehechas++; }
   }
   if (rehechas) { await A.guardarFicha(a); toast(`Plan actualizado con el generador nuevo (${rehechas} semana${rehechas > 1 ? "s" : ""})`); }
   await asegurarSemanas(a);
@@ -378,6 +407,7 @@ function pintarAtleta() {
       ${prox ? `<div class="sub">🏁 Próxima: <b>${esc(prox.nombre || PRUEBAS[prox.prueba])}</b> · ${fechaCorta(prox.fecha)} · faltan ${diasEntre(h, prox.fecha)} días</div>` : ""}</div>
       <button class="btn sec mini" data-acc="ficha">✎ Ficha</button>
     </div>
+    ${htmlAlertas(a)}
     ${htmlNovedades(a)}
     <div class="enlace">
       <span class="lbl">Su enlace</span>
@@ -404,6 +434,9 @@ function pintarAtleta() {
         <button class="btn sec mini" data-acc="hoy">Hoy</button>
         <button class="btn sec mini" data-acc="rehacer">↻ Rehacer semana</button>
         <button class="btn sec mini" data-acc="imprimir">🖨️ PDF</button>
+        <button class="btn sec mini" data-acc="msg-semana">💬 Mensaje${claveClaude() ? " / 🤖 Análisis" : ""}</button>
+        <button class="btn sec mini" data-acc="guardar-st">⭐ Guardar semana tipo</button>
+        <button class="btn sec mini" data-acc="elegir-st">📋 Aplicar semana tipo</button>
       </div>`;
   }
   const el = $("#sub");
@@ -460,6 +493,140 @@ function pintarPlan() {
   </article>`;
 }
 
+/* ---------------- Tests de recalibración ---------------- */
+async function procesarTests(a) {
+  const hechos = (a.tests || []).map(t => t.id);
+  for (const r of (a._aportes || []).filter(x => x.tipo === "sesion" && x.hecho !== "no" && !hechos.includes(x.id))) {
+    const ses = a.semanas?.[r.lunes]?.dias?.[r.dia]?.ses?.find(s => s.id === r.sesId);
+    if (ses?.tipo !== "test") continue;
+    const km = r.act?.km || parseFloat(String(r.km || "5").replace(",", ".")) || 5;
+    const seg = r.act?.mejores?.["5k"] || (r.act?.dur ? r.act.dur * 5 / km : r.tiempo ? parseTiempo(r.tiempo) * 5 / km : 0);
+    if (!seg || seg / 5 < 170 || seg / 5 > 600) continue;
+    a.tests = [...(a.tests || []), { id: r.id, fecha: sumaDias(r.lunes, r.dia), t5: Math.round(seg) }];
+    const marcas = { ...(a.marcas || {}) }; delete marcas["10k"];
+    marcas["5k"] = fmtHoras(seg); a.marcas = marcas;
+    await A.guardarFicha(a);
+    await actualizarFuturas(a);
+    toast(`🎯 Test de 5 km: ${fmtHoras(seg)}. Ritmos actualizados y semanas rehechas.`);
+  }
+}
+
+/* ---------------- Comentarios y análisis con Claude ---------------- */
+function dialogo(html) { $("#gen").innerHTML = html; $("#dlg-gen").showModal(); }
+const cerrarDialogo = () => $("#dlg-gen").close();
+async function fotosDe(a, r) {
+  const imgs = [];
+  if (r.img) imgs.push(r.img);
+  for (const id of (r.fotos || [])) { try { const f = await A.leerFoto(a.token, id); if (f) imgs.push(f); } catch (e) { } }
+  return imgs;
+}
+function contextoDeportista(a) {
+  const Z = calcZonas(a);
+  return `Deportista: ${a.nombre}, ${a.edad} años, ${a.sexo === "m" ? "mujer" : "hombre"}, nivel ${a.nivel}, objetivo ${OBJ[a.objetivo]}.
+Zonas de ritmo (min/km): ${Z.ritmos ? Z.ritmos.map((r, i) => `Z${i + 1} ${fmtRitmo(r[0])}-${fmtRitmo(r[1])}`).join(", ") : "sin ritmos"}${Z.ritmoEstimado ? " (estimados)" : ""}.
+Zonas de pulso (ppm): ${Z.fc.map((r, i) => `Z${i + 1} ${r[0]}-${r[1]}`).join(", ")}.`;
+}
+let comentando = null;
+function abrirComentario(sesId) {
+  const snap = actual.semanas[lunesVista];
+  const dia = snap.dias.findIndex(d => d.ses.some(s => s.id === sesId));
+  const s = snap.dias[dia].ses.find(x => x.id === sesId);
+  const r = (actual._aportes || []).find(x => x.tipo === "sesion" && x.lunes === lunesVista && x.sesId === sesId);
+  comentando = { dia, s, r };
+  dialogo(`<h3>💬 Comentario para ${esc(actual.nombre.split(" ")[0])}</h3>
+    <p class="small">${DIAS[dia]} · ${esc(s.t)}</p>
+    <textarea id="com-txt" rows="5" placeholder="Ej.: ¡Muy bien! Pero los rodajes suaves, más despacio: 5:40 como mínimo.">${esc(s.coment || "")}</textarea>
+    <div id="com-ia"></div>
+    <div class="acciones fila">
+      ${claveClaude() ? `<button class="btn sec mini" data-acc="ia-sesion">🤖 Analizar con Claude</button>` : `<span class="small muted">Con tu clave de Claude (Herramientas → Claude) puede redactarlo analizando sus capturas.</span>`}
+      <span class="sp"></span><button class="btn sec mini" data-acc="cerrar-dlg">Cancelar</button><button class="btn pri mini" data-acc="guardar-coment">Guardar</button>
+    </div>`);
+}
+async function iaSesion() {
+  const { dia, s, r } = comentando, a = actual;
+  $("#com-ia").innerHTML = `<p class="cargando">🤖 Analizando${(r.fotos?.length || r.img) ? " sus capturas" : ""}…</p>`;
+  try {
+    const imgs = await fotosDe(a, r);
+    const datos = `${contextoDeportista(a)}
+SESIÓN PLANIFICADA (${DIAS[dia]}): ${s.t}, ${s.min} min. ${s.z || ""}
+Pasos: ${(s.p || []).join(" | ")}
+LO QUE HA REGISTRADO: ${{ si: "hecho", parcial: "a medias", no: "no lo hizo" }[r.hecho] || r.hecho}. Esfuerzo ${r.rpe || "?"}/10. Km ${r.km || "?"}. Tiempo ${r.tiempo || "?"}. Pulso medio ${r.fc || "?"}. Comentario: "${r.texto || ""}".
+${r.act ? `Datos del archivo del reloj: ${r.act.km} km, ${fmtHoras(r.act.dur)}, pulso ${r.act.fcMed || "?"}/${r.act.fcMax || "?"}.` : ""}
+${imgs.length ? `Adjunto ${imgs.length} captura(s) de su actividad.` : "Sin capturas."}`;
+    const texto = await analizar(`Analiza cómo ha ido esta sesión respecto a lo planificado (ritmos, pulso, sensaciones; lee los datos de las capturas: parciales, ritmos por km, pulso, desnivel).
+Responde en dos partes, con estos títulos exactos:
+PARA EL DEPORTISTA: un comentario de 2-4 frases, directo y motivador, con lo que ha hecho bien y lo que debe ajustar.
+PARA EL ENTRENADOR: 2-4 puntos técnicos (si iba fuera de zona, fatiga, si conviene ajustar la próxima semana).`, datos, imgs);
+    const [, dep = texto, ent = ""] = /PARA EL DEPORTISTA:?\s*([\s\S]*?)\s*PARA EL ENTRENADOR:?\s*([\s\S]*)/i.exec(texto) || [];
+    $("#com-txt").value = dep.trim();
+    $("#com-ia").innerHTML = ent ? `<p class="small"><b>Para ti (no lo ve el deportista):</b></p><div class="ia-res">${esc(ent.trim())}</div>` : "";
+  } catch (e) { $("#com-ia").innerHTML = `<p class="alerta">${esc(e.message)}</p>`; }
+}
+async function guardarComentario() {
+  const { dia, s } = comentando, snap = actual.semanas[lunesVista];
+  const x = snap.dias[dia].ses.find(y => y.id === s.id);
+  x.coment = $("#com-txt").value.trim();
+  await A.guardarSemana(actual, snap); await publicar(actual);
+  cerrarDialogo(); toast("Comentario guardado: lo verá en su entreno"); pintarAtleta();
+}
+async function iaSemana() {
+  const a = actual, snap = a.semanas[lunesVista];
+  if (!snap) return;
+  dialogo(`<h3>🤖 Análisis de la semana</h3><p class="cargando">Analizando su semana…</p>`);
+  try {
+    const regs = (a._aportes || []).filter(x => x.tipo === "sesion" && x.lunes === lunesVista);
+    const val = (a._aportes || []).find(x => x.tipo === "semana" && x.lunes === lunesVista);
+    const acts = (a.actividades || []).filter(x => x.fecha >= lunesVista && x.fecha <= sumaDias(lunesVista, 6));
+    const imgs = [];
+    for (const r of regs) { if (imgs.length >= 8) break; imgs.push(...(await fotosDe(a, r)).slice(0, 8 - imgs.length)); }
+    const datos = `${contextoDeportista(a)}
+SEMANA ${rangoSemana(lunesVista)} · fase ${snap.fase.n}.
+PLAN: ${snap.dias.map((d, i) => `${DIAS[i]}: ${d.ses.map(s => `${s.t} (${s.min}')`).join(" + ") || "descanso"}`).join(" | ")}
+REGISTROS: ${regs.map(r => `${DIAS[r.dia]} ${r.titulo || ""}: ${r.hecho}, esfuerzo ${r.rpe || "?"}, ${r.km || "?"} km, ${r.tiempo || "?"}, pulso ${r.fc || "?"}, "${r.texto || ""}"`).join(" | ") || "ninguno"}
+ACTIVIDADES DEL RELOJ: ${acts.map(x => `${x.fecha} ${x.dep} ${x.km} km ${fmtHoras(x.dur)} pulso ${x.fcMed || "?"}`).join(" | ") || "ninguna"}
+VALORACIÓN DEL DEPORTISTA: ${val ? `${val.sensacion}, pide ${val.carga} carga${val.molestias ? `, molestias: ${val.molestiasTxt}` : ""}. "${val.texto || ""}"` : "no ha valorado"}`;
+    const texto = await analizar(`Haz un análisis de la semana: cumplimiento, si los rodajes fueron suaves de verdad, calidad de las sesiones clave y señales de fatiga.
+Termina con una RECOMENDACIÓN para la semana siguiente (bajar un 15 %, mantener o subir un 10 %) y por qué, y un MENSAJE PARA EL DEPORTISTA de 2-3 frases.`, datos, imgs);
+    const msg = (/MENSAJE PARA EL DEPORTISTA:?\s*([\s\S]*)$/i.exec(texto) || [])[1] || "";
+    dialogo(`<h3>🤖 Análisis de la semana</h3><div class="ia-res">${esc(texto)}</div>
+      <label>Mensaje que verá en su semana <textarea id="sem-msg" rows="3">${esc((msg || snap.comentSemana || "").trim())}</textarea></label>
+      <div class="acciones fila"><span class="sp"></span><button class="btn sec mini" data-acc="cerrar-dlg">Cerrar</button><button class="btn pri mini" data-acc="guardar-msg-sem">Guardar mensaje</button></div>`);
+  } catch (e) { dialogo(`<h3>🤖 Análisis de la semana</h3><p class="alerta">${esc(e.message)}</p><div class="acciones fila"><span class="sp"></span><button class="btn sec mini" data-acc="cerrar-dlg">Cerrar</button></div>`); }
+}
+function mensajeSemana() {
+  const snap = actual.semanas[lunesVista];
+  dialogo(`<h3>💬 Mensaje de la semana</h3><p class="small">Lo verá arriba de su semana.</p>
+    <textarea id="sem-msg" rows="4">${esc(snap?.comentSemana || "")}</textarea>
+    <div class="acciones fila">${claveClaude() ? `<button class="btn sec mini" data-acc="ia-semana">🤖 Analizar la semana con Claude</button>` : ""}<span class="sp"></span><button class="btn sec mini" data-acc="cerrar-dlg">Cancelar</button><button class="btn pri mini" data-acc="guardar-msg-sem">Guardar</button></div>`);
+}
+
+/* ---------------- Semanas tipo ---------------- */
+function guardarSemanaTipo() {
+  const snap = actual.semanas[lunesVista]; if (!snap) return;
+  const nombre = prompt("Nombre de la semana tipo:", `${snap.fase.n} · ${actual.nombre.split(" ")[0]}`);
+  if (!nombre) return;
+  const dias = snap.dias.map(d => d.ses.map(({ id, editada, coment, ...s }) => s));
+  ajustes.semanasTipo = [...(ajustes.semanasTipo || []), { nombre, dias, fecha: hoy() }];
+  A.guardarAjustes(ajustes).then(() => toast(`Semana tipo «${nombre}» guardada`));
+}
+function elegirSemanaTipo() {
+  const st = ajustes.semanasTipo || [];
+  dialogo(`<h3>📋 Aplicar una semana tipo</h3>
+    ${st.length ? `<p class="small">Sustituye los entrenos de esta semana (${rangoSemana(lunesVista)}). El menú se recalcula solo.</p><div class="st-lista">${st.map((x, i) => `<div class="fila"><span><b>${esc(x.nombre)}</b> <span class="small muted">${x.dias.flat().length} sesiones · ${fmtMin(x.dias.flat().reduce((t, s) => t + (+s.min || 0), 0))}</span></span><span><button class="btn pri mini" data-acc="aplicar-st" data-i="${i}">Aplicar</button> <button class="quita" data-acc="borrar-st" data-i="${i}" aria-label="Borrar">✕</button></span></div>`).join("")}</div>`
+      : `<p class="muted">Aún no tienes semanas tipo. Prepara una semana como te guste y pulsa «⭐ Guardar semana tipo».</p>`}
+    <div class="acciones fila"><span class="sp"></span><button class="btn sec mini" data-acc="cerrar-dlg">Cerrar</button></div>`);
+}
+async function aplicarSemanaTipo(i) {
+  const st = (ajustes.semanasTipo || [])[i]; if (!st) return;
+  const snap = actual.semanas[lunesVista] || generarSemana(actual, lunesVista);
+  snap.dias.forEach((d, k) => { d.ses = (st.dias[k] || []).map(s => ({ ...JSON.parse(JSON.stringify(s)), id: uid(8), editada: true })); });
+  snap.editada = true;
+  recalcular(actual, snap);
+  actual.semanas[lunesVista] = snap;
+  await A.guardarSemana(actual, snap); await publicar(actual);
+  cerrarDialogo(); toast(`Semana tipo «${st.nombre}» aplicada`); pintarAtleta();
+}
+
 /* ---------------- Novedades del deportista ---------------- */
 function htmlNovedades(a) {
   const n = nuevos(a);
@@ -497,6 +664,15 @@ function pintarHerr() {
       ${plantillas().map((p, i) => `<div class="plantilla"><div><b>${DEP[p.dep]?.i || ""} ${esc(p.nombre)}</b> <span class="small">· ${fmtMin(p.min)}${p.z ? " · " + esc(p.z) : ""}${p.propia ? " · tuya" : " · de serie"}</span>
         <div class="small muted">${esc((p.p || []).join(" · "))}${p.ej ? esc(" · " + p.ej.map(x => x.n).join(", ")) : ""}</div></div>
         ${p.propia ? `<button class="quita" data-acc="borrar-plantilla" data-i="${i}" aria-label="Borrar">✕</button>` : ""}</div>`).join("")}
+    </article>`;
+  } else if (subH === "claude") {
+    el.innerHTML = `<article class="dia"><div class="dia-cab"><h3>🤖 Análisis con Claude</h3></div>
+      <p class="ayuda">Con tu clave de la API de Anthropic, Claude lee las capturas y los datos de tus deportistas y te redacta comentarios de cada entreno y análisis de cada semana (botones «💬 Comentar» y «💬 Mensaje / 🤖 Análisis» en su semana).</p>
+      <ul class="usa"><li><b>La clave se guarda solo en este navegador</b>: no se sube a la nube y tus deportistas nunca la ven. En otro dispositivo tendrás que ponerla otra vez.</li>
+      <li><b>Se paga por uso</b> en tu cuenta de Anthropic: analizar un entreno con capturas cuesta del orden de unos céntimos.</li>
+      <li>Consigue la clave en <b>console.anthropic.com</b> → API Keys → «Create Key» (necesitas añadir saldo en Billing).</li></ul>
+      <label>Clave de la API <input type="password" id="clave-claude" value="${esc(claveClaude())}" placeholder="sk-ant-…" autocomplete="off"></label>
+      <div class="acciones fila"><button class="btn pri mini" data-acc="guardar-clave">Guardar</button><button class="btn sec mini" data-acc="probar-clave" ${claveClaude() ? "" : "disabled"}>Probar conexión</button>${claveClaude() ? `<button class="btn peligro mini" data-acc="borrar-clave">Quitar clave</button>` : ""}<span class="small" id="clave-res"></span></div>
     </article>`;
   } else if (subH === "biblioteca") {
     const v = ajustes.videos || {};
@@ -570,6 +746,9 @@ async function accionHerr(t) {
     for (const a of atletas) if (a.semanas) await publicar(a);
     toast("Vídeos guardados. Tus deportistas los verán en sus ejercicios."); return true;
   }
+  if (acc === "guardar-clave") { guardarClave($("#clave-claude").value); toast("Clave guardada en este navegador"); pintarHerr(); return true; }
+  if (acc === "borrar-clave") { guardarClave(""); toast("Clave quitada"); pintarHerr(); return true; }
+  if (acc === "probar-clave") { $("#clave-res").textContent = "⏳ Probando…"; try { await probarClave(); $("#clave-res").textContent = "✅ Conectado"; } catch (e) { $("#clave-res").textContent = "⚠️ " + e.message; } return true; }
   if (acc === "copiar-pres") { const u = new URL("conoceme.html", location.href).href; try { await navigator.clipboard.writeText(u); toast("Enlace copiado"); } catch (e) { prompt("Copia el enlace:", u); } return true; }
   return false;
 }
@@ -939,7 +1118,7 @@ function enlazar() {
     if (acc === "sem-ant" || acc === "sem-sig") { lunesVista = sumaDias(lunesVista, acc === "sem-ant" ? -7 : 7); if (lunesVista >= lunesDe(hoy()) && !a.semanas[lunesVista]) { a.semanas[lunesVista] = generarSemana(a, lunesVista); await A.guardarSemana(a, a.semanas[lunesVista]); await publicar(a); } return pintarAtleta(); }
     if (acc === "hoy") { lunesVista = lunesDe(hoy()); return pintarAtleta(); }
     if (acc === "generar" || acc === "rehacer") {
-      if (acc === "rehacer" && a.semanas[lunesVista]?.editada && !confirm("Esta semana tiene cambios a mano. ¿Rehacerla desde cero?")) return;
+      if (acc === "rehacer" && (a.semanas[lunesVista]?.editada || conRegistros(a, lunesVista)) && !confirm("Esta semana tiene cambios a mano o entrenos ya registrados por el deportista (sus registros dejarían de verse en esta semana). ¿Rehacerla igualmente?")) return;
       a.semanas[lunesVista] = generarSemana(a, lunesVista);
       await A.guardarSemana(a, a.semanas[lunesVista]); await publicar(a);
       toast("Semana generada"); return pintarAtleta();
@@ -952,6 +1131,17 @@ function enlazar() {
       snap.dias[i].menuVar = (snap.dias[i].menuVar || 0) + 1;
       recalcular(a, snap, i); await A.guardarSemana(a, snap); await publicar(a); return pintarAtleta();
     }
+    if (acc === "comentar") return abrirComentario(t.dataset.id);
+    if (acc === "ia-sesion") return iaSesion();
+    if (acc === "guardar-coment") return guardarComentario();
+    if (acc === "cerrar-dlg") return cerrarDialogo();
+    if (acc === "msg-semana") return mensajeSemana();
+    if (acc === "ia-semana") return iaSemana();
+    if (acc === "guardar-msg-sem") { const snap = a.semanas[lunesVista]; snap.comentSemana = $("#sem-msg").value.trim(); await A.guardarSemana(a, snap); await publicar(a); cerrarDialogo(); toast("Mensaje guardado"); return pintarAtleta(); }
+    if (acc === "guardar-st") return guardarSemanaTipo();
+    if (acc === "elegir-st") return elegirSemanaTipo();
+    if (acc === "aplicar-st") { if (a.semanas[lunesVista]?.ses?.length !== 0 && !confirm("¿Sustituir los entrenos de esta semana por la semana tipo?")) return; return aplicarSemanaTipo(+t.dataset.i); }
+    if (acc === "borrar-st") { ajustes.semanasTipo = (ajustes.semanasTipo || []).filter((_, i) => i !== +t.dataset.i); await A.guardarAjustes(ajustes); return elegirSemanaTipo(); }
     if (acc === "avisar") {
       let tel = a.telefono.replace(/\D/g, ""); if (tel.length === 9) tel = "34" + tel;
       window.open(`https://wa.me/${tel}?text=${encodeURIComponent(`Hola ${a.nombre.split(" ")[0]}, te he actualizado el plan. Échale un ojo 👇\n${enlace(a)}`)}`, "_blank");

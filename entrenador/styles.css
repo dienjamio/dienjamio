@@ -402,3 +402,14 @@ cite{display:block;color:var(--ink3);font-style:normal;font-size:13px;margin-top
 .sem-act summary span{font-size:13px;color:var(--ink2)}
 .act{display:flex;gap:10px;align-items:flex-start;padding:8px 0 4px 4px}
 .act .ic{font-size:20px}
+
+/* ---------- v7: comparativa, comentarios, alertas, Claude ---------- */
+.comparativa{margin-top:6px;font-size:13.5px;display:flex;flex-direction:column;gap:2px}
+.coment{margin-top:8px;background:var(--accent-soft);border-radius:10px;padding:8px 10px;font-size:14px}
+.alertas{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.alerta-c{background:#2A2106;color:var(--ink);border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700}
+.alerta-c.grave{background:var(--crit-soft,#320B16)}
+.tarjeta .alertas{margin-top:4px}
+.ia-res{white-space:pre-wrap;background:var(--paper);border-radius:10px;padding:10px;font-size:14px;max-height:50vh;overflow:auto}
+.st-lista{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.st-lista .fila{justify-content:space-between;background:var(--paper);border-radius:10px;padding:8px 10px}

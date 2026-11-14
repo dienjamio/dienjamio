@@ -1,11 +1,11 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141819";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct } from "./vista.js?v=202611141819";
-import { leerArchivo, fusionar } from "./importar.js?v=202611141819";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141819";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141819";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141819";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141826";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct } from "./vista.js?v=202611141826";
+import { leerArchivo, fusionar } from "./importar.js?v=202611141826";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141826";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141826";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141826";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -86,7 +86,7 @@ function pintar() {
   } else if (v === "semana") {
     const regs = regsDe(lunes), editable = lunes <= lunesDe(hoy());
     const acts = actividades();
-    m.innerHTML = navSemana() + (snap ? htmlCabSemana(snap) + snap.dias.map((_, i) => htmlDia(snap, i, false, { regs, acts, registrar: editable && sumaDias(lunes, i) <= hoy() })).join("") + (editable ? htmlValorar(lunes) : "") : `<div class="panel vacio"><p>Sin plan para esta semana.</p></div>`);
+    m.innerHTML = navSemana() + (snap ? `<div class="fila cal-f"><button class="btn sec mini" data-acc="calendario">📅 Añadir la semana a mi calendario</button></div>` + htmlCabSemana(snap) + snap.dias.map((_, i) => htmlDia(snap, i, false, { regs, acts, registrar: editable && sumaDias(lunes, i) <= hoy() })).join("") + (editable ? htmlValorar(lunes) : "") : `<div class="panel vacio"><p>Sin plan para esta semana.</p></div>`);
   } else if (v === "menu") {
     m.innerHTML = navSemana() + (snap ? snap.dias.map((_, i) => htmlMenuDia(snap, i)).join("") + `<p class="aviso">Menú orientativo según la carga de cada día.</p>` : "");
   } else if (v === "carreras") {
@@ -105,6 +105,26 @@ function pintar() {
       <p class="small">🔥 Racha: <b>${L.racha}</b> semana${L.racha === 1 ? "" : "s"} seguidas entrenando · ✅ ${L.n} entrenos registrados${L.km ? ` · 🛣️ ${Math.round(L.km)} km` : ""}</p></article>` + htmlProgreso(mezclarProgreso(P.progreso || [], propio)) + (htmlActividades(actividades().filter(a => a.fecha >= sumaDias(hoy(), -84)), "Mis actividades") || `<p class="muted small">Cuando registres entrenos subiendo el archivo de tu reloj (o tu entrenador suba tu historial), aquí verás todas tus actividades con sus datos.</p>`);
   }
 }
+/* Calendario: un evento de día completo por sesión (.ics, lo abren Google Calendar, iPhone, Outlook…) */
+function descargarCalendario(snap) {
+  if (!snap) return;
+  const e = t => String(t || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
+  const f = d => d.replace(/-/g, "");
+  const ev = [];
+  snap.dias.forEach((d, i) => d.ses.forEach(x => {
+    const dia = sumaDias(snap.lunes, i);
+    ev.push(["BEGIN:VEVENT", `UID:${x.id}-${dia}@dienjamio-entrenador`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+      `DTSTART;VALUE=DATE:${f(dia)}`, `DTEND;VALUE=DATE:${f(sumaDias(dia, 1))}`, `SUMMARY:${e(`${x.t} (${x.min}')`)}`,
+      `DESCRIPTION:${e([x.z, ...(x.p || []), ...(x.ej || []).map(j => `${j.n}: ${j.s}`), x.n].filter(Boolean).join("\n"))}`, "END:VEVENT"].join("\r\n"));
+  }));
+  const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Dienjamio Entrenador//ES", "CALSCALE:GREGORIAN", ...ev, "END:VCALENDAR"].join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+  a.download = `entrenos-${snap.lunes}.ics`;
+  document.body.append(a); a.click(); a.remove();
+  toast("Abre el archivo descargado para añadir los entrenos a tu calendario");
+}
+
 /* Racha y medallas: para que apetezca registrar */
 function logros() {
   const ses = aportes.filter(x => x.tipo === "sesion" && x.hecho !== "no");
@@ -134,6 +154,7 @@ async function clic(e) {
   const acc = b.dataset.acc;
   if (acc === "ir-carreras") { v = "carreras"; return pintar(); }
   if (acc === "ir-progreso") { v = "progreso"; return pintar(); }
+  if (acc === "calendario") return descargarCalendario(P.semanas[lunes]);
   if (acc === "hecho-rapido") {
     const r = buscarSesion(b.dataset.id); if (!r) return;
     return guardar(`ses-${r.l}-${r.s.id}`, { tipo: "sesion", lunes: r.l, dia: r.i, sesId: r.s.id, titulo: r.s.t, min: r.s.min, hecho: "si", visto: false }, "✅ ¡Hecho! Bien trabajado");

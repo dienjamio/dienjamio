@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/icon-192.png">
-<link rel="stylesheet" href="styles.css?v=202611141819">
+<link rel="stylesheet" href="styles.css?v=202611141826">
 </head>
 <body>
 <header class="top no-print">
@@ -164,6 +164,7 @@
       <button data-herr="presentacion" aria-selected="true">⭐ Mi presentación</button>
       <button data-herr="plantillas">🧩 Plantillas</button>
       <button data-herr="biblioteca">🏋️ Biblioteca</button>
+      <button data-herr="claude">🤖 Claude</button>
     </nav>
     <div id="herr"></div>
   </section>
@@ -252,7 +253,10 @@
   </form>
 </dialog>
 
+<!-- Diálogo general (comentarios, análisis, semanas tipo) -->
+<dialog id="dlg-gen" class="hoja"><div id="gen"></div></dialog>
+
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/app.js?v=202611141819"></script>
+<script type="module" src="js/app.js?v=202611141826"></script>
 </body>
 </html>

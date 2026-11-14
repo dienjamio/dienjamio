@@ -22,3 +22,12 @@ App web para entrenadores. Cada deportista tiene su ficha, su plan semanal y un 
 - **Enlace del deportista** (`ver.html?d=…`): ve su día, su semana, su menú y sus carreras, siempre actualizado. Necesita Firebase.
 
 Archivos: `index.html` (entrenador), `ver.html` (deportista), `js/` (motor, lectura de archivos, almacenamiento, pantallas) y `js/firebase-config.js` (configuración de Firebase).
+
+### Herramientas del entrenador (v4)
+- **Alertas** en la lista y en cada ficha: subidas de carga, semanas duras seguidas, molestias, días sin registrar o sin entrar, bajo cumplimiento.
+- **Test de 5 km** automático cada 8 semanas: al registrarlo, se actualizan sus ritmos y se rehacen las semanas futuras.
+- **Semanas tipo**: guardar una semana entera y aplicarla a cualquier deportista.
+- **Plan frente a hecho**: ritmo y pulso reales comparados con la zona objetivo de cada sesión.
+- **Comentarios** del entrenador en cada sesión y mensaje de la semana; con **Claude** (clave del entrenador, solo en su navegador) se redactan analizando las capturas.
+- **Calendario**: el deportista descarga su semana en .ics para su calendario.
+- `vendor/anthropic-sdk-1.2.0.mjs`: SDK oficial de Anthropic empaquetado para el navegador (se carga solo al usar Claude).

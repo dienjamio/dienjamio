@@ -1,13 +1,33 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141819";
-import { infoEjercicio } from "./biblioteca.js?v=202611141819";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141819";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141826";
+import { infoEjercicio } from "./biblioteca.js?v=202611141826";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141826";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
 const ESTADO = { si: ["✅", "Hecho"], parcial: ["◐", "A medias"], no: ["✖", "No hecho"] };
 /** Lo que el deportista ha registrado de una sesión. */
-export function htmlRegistro(r) {
+/** Compara el ritmo y el pulso reales con el objetivo de la sesión. */
+export function htmlComparativa(s, r) {
+  if (!s?.obj || !r || r.hecho === "no") return "";
+  const km = r.act?.km || parseFloat(String(r.km || "").replace(",", "."));
+  const seg = r.act?.dur || (r.tiempo ? r.tiempo.split(":").reduce((t, x) => t * 60 + (+x || 0), 0) : 0);
+  const fc = r.act?.fcMed || +r.fc || 0;
+  const p = [];
+  if (km > 0.5 && seg > 60 && s.obj.ritmo) {
+    const real = seg / km, [rap, len] = s.obj.ritmo;
+    const dif = real < rap ? Math.round(rap - real) : real > len ? Math.round(real - len) : 0;
+    p.push(dif === 0 ? `✅ Ritmo ${fmtRitmo(real)} /km: dentro de Z${s.obj.zona} (${fmtRitmo(rap)}-${fmtRitmo(len)})`
+      : real < rap ? `⚠️ Ritmo ${fmtRitmo(real)} /km: ${dif}" más rápido de lo previsto (${fmtRitmo(rap)}-${fmtRitmo(len)})` : `🐢 Ritmo ${fmtRitmo(real)} /km: ${dif}" más lento de lo previsto`);
+  }
+  if (fc && s.obj.fc) {
+    const [lo, hi] = s.obj.fc;
+    p.push(fc > hi ? `⚠️ Pulso ${fc}: por encima de Z${s.obj.zona} (${lo}-${hi})` : fc < lo ? `💤 Pulso ${fc}: por debajo de Z${s.obj.zona}` : `✅ Pulso ${fc}: en zona (${lo}-${hi})`);
+  }
+  return p.length ? `<div class="comparativa">${p.map(x => `<div>${x}</div>`).join("")}</div>` : "";
+}
+
+export function htmlRegistro(r, s = null) {
   if (!r) return "";
   const e = ESTADO[r.hecho] || ESTADO.si;
   const datos = [r.rpe ? `esfuerzo ${r.rpe}/10` : "", r.km ? `${String(r.km).replace(".", ",")} km` : "", r.tiempo ? esc(r.tiempo) : "", r.fc ? `${r.fc} ppm` : ""].filter(Boolean).join(" · ");
@@ -15,6 +35,7 @@ export function htmlRegistro(r) {
     <div class="reg-cab"><b>${e[0]} ${e[1]}</b>${datos ? `<span>${datos}</span>` : ""}</div>
     ${r.texto ? `<p>“${esc(r.texto)}”</p>` : ""}
     ${r.act ? `<div class="act-l">⌚ ${htmlDatosAct(r.act)}</div>` : ""}
+    ${htmlComparativa(s, r)}
     ${(r.thumbs?.length || r.img) ? `<div class="fotos-reg">${r.img ? `<button class="miniatura" data-acc="ver-img"><img src="${r.img}" alt="Captura del entreno"></button>` : ""}${(r.thumbs || []).map((t, i) => `<button class="miniatura" data-acc="ver-foto" data-f="${esc(r.fotos?.[i] || "")}"><img src="${t}" alt="Captura ${i + 1}"></button>`).join("")}</div>` : ""}
   </div>`;
 }
@@ -59,7 +80,9 @@ export function htmlSesion(s, ed = false, op = {}) {
     ${s.p && s.p.length ? `<ol>${s.p.map(p => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
     ${ej}
     ${s.n ? `<div class="nota">${esc(s.n)}</div>` : ""}
-    ${htmlRegistro(reg)}
+    ${htmlRegistro(reg, s)}
+    ${s.coment ? `<div class="coment">💬 <b>Tu entrenador:</b> ${esc(s.coment)}</div>` : ""}
+    ${ed && reg ? `<div class="ses-acc"><button class="btn sec mini" data-acc="comentar" data-id="${s.id}">💬 ${s.coment ? "Cambiar comentario" : "Comentar"}</button></div>` : ""}
     ${ed ? `<div class="ses-acc"><button class="btn sec mini" data-acc="editar-ses" data-id="${s.id}">✎ Cambiar</button></div>` : ""}
     ${op.registrar ? `<div class="ses-acc">${reg ? `<button class="btn sec mini" data-acc="registrar" data-id="${s.id}">✎ Cambiar mi registro</button>` : `<button class="btn pri mini" data-acc="hecho-rapido" data-id="${s.id}">✅ Hecho</button><button class="btn sec mini" data-acc="registrar" data-id="${s.id}">📝 Con detalles</button>`}</div>` : ""}
   </div>`;
@@ -100,6 +123,7 @@ export function htmlCabSemana(snap) {
       <span class="badge ${snap.fase.clave === "descarga" ? "desc" : "fase"}">${esc(snap.fase.n)}</span>
     </div>
     <p class="fase-txt">${esc(snap.fase.d)}</p>
+    ${snap.comentSemana ? `<div class="coment">💬 <b>Tu entrenador:</b> ${esc(snap.comentSemana)}</div>` : ""}
     <div class="kpis">
       <div class="kpi"><b>${fmtMin(total)}</b><span>Tiempo total</span></div>
       <div class="kpi"><b>${nSes}</b><span>Sesiones</span></div>

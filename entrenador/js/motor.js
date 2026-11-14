@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141819";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141826";
 
 /* =========================================================
    Catálogos
@@ -242,6 +242,11 @@ function plantilla(a, F, ctx) {
   } else if (F.f === "puesta") {
     P = P.filter(s => !(s.tipo === "calidad" && s.q === 2));
   }
+  // Test de recalibración (cada 8 semanas, en la 6.ª del bloque): un 5 km a tope que actualiza sus ritmos
+  if (esSemanaTest(a, F, ctx) && P.some(s => s.dep === "run" && s.tipo === "calidad")) {
+    const i = P.findIndex(s => s.dep === "run" && s.tipo === "calidad");
+    P[i] = S("run", "test");
+  }
   if (F.descarga) P = P.map(s => s.tipo === "calidad" ? S(s.dep, "suave", { rectas: true }) : s.tipo === "transicion" ? S(s.dep, "suave") : s);
 
   // Carreras B y C de la semana restan sesiones de calidad
@@ -271,10 +276,12 @@ function plantilla(a, F, ctx) {
   return { P, k, dobles, prim, general, fuerzaTipo };
 }
 
+export const esSemanaTest = (a, F, ctx) => !a.cero && ["base", "construccion", "especifico"].includes(F.f) && !F.descarga && ctx.semanaNum % 8 === 6 && !ctx.enSemana.length;
+
 /* =========================================================
    Colocación en la semana
    ========================================================= */
-const DURO = ["largo", "calidad", "competicion", "transicion"];
+const DURO = ["largo", "calidad", "competicion", "transicion", "test"];
 const esDura = s => DURO.includes(s.tipo);
 const distD = (x, y) => { const d = Math.abs(x - y); return Math.min(d, 7 - d); };
 export const dispDia = (a, d) => (a.disp && a.disp[d]) || { on: false, max: 0 };
@@ -313,7 +320,7 @@ function colocar(a, T, F, ctx) {
   const propias = T.P.slice(0, nPropias);
   const extra = T.P.slice(nPropias, nPropias + T.dobles);
 
-  const rango = s => ({ largo: 1, transicion: 2, calidad: 2, readapt: 2, iniciacion: 2, activacion: 3, tecnica: 4, recuperacion: 5, suave: 6 }[s.tipo] ?? 7);
+  const rango = s => ({ largo: 1, transicion: 2, calidad: 2, test: 2, readapt: 2, iniciacion: 2, activacion: 3, tecnica: 4, recuperacion: 5, suave: 6 }[s.tipo] ?? 7);
   const duros = [...fijos];
   const orden = propias.map((s, i) => ({ s, i })).sort((x, y) => rango(x.s) - rango(y.s) || x.i - y.i);
   const carreraDia = semana.findIndex(x => x.some(y => y.tipo === "competicion" && y.carrera?.prioridad !== "C"));
@@ -326,7 +333,7 @@ function colocar(a, T, F, ctx) {
       const mx = maxDia(a, d);
       const minDist = duros.length ? Math.min(...duros.map(h => distD(h, d))) : 4;
       if (s.tipo === "largo") sc = (d === 6 ? 50 : d === 5 ? 46 : d * 3) + Math.min(mx, 300) / 4 - (minDist === 0 ? 20 : 0) - (cualquierCarrera(d) ? 60 : 0);
-      else if (s.tipo === "calidad" || s.tipo === "transicion") sc = minDist * 10 + (d === 1 || d === 3 ? 3 : 0) - (mx < 45 ? 30 : 0) - (carreraDia >= 0 && (carreraDia - d === 1 || carreraDia - d === 2) ? 25 : 0);
+      else if (s.tipo === "calidad" || s.tipo === "transicion" || s.tipo === "test") sc = minDist * 10 + (d === 1 || d === 3 ? 3 : 0) - (mx < 45 ? 30 : 0) - (carreraDia >= 0 && (carreraDia - d === 1 || carreraDia - d === 2) ? 25 : 0);
       else if (s.tipo === "readapt" || s.tipo === "iniciacion") sc = minDist * 10 + (semana[(d + 6) % 7].some(x => x.tipo === s.tipo) ? -15 : 0);
       else if (s.tipo === "activacion") sc = carreraDia >= 0 ? (carreraDia - d === 2 ? 30 : carreraDia - d === 1 ? 25 : -distD(carreraDia, d)) : 0;
       else if (s.tipo === "recuperacion") sc = (semana[(d + 6) % 7].some(esDura) ? 20 : 0) + minDist;
@@ -427,6 +434,7 @@ function duraciones(a, semana, F, ctx, Z) {
   for (const s of todas) {
     if (s.dep === "fuerza") s.min = minFuerza(s);
     else if (s.tipo === "movilidad") s.min = 25;
+    else if (s.tipo === "test") s.min = ini ? 45 : 50;
     else if (s.tipo === "iniciacion") {
       const [tr, an, rp] = INICIACION[Math.min(ctx.semanaNum, INICIACION.length) - 1];
       s.min = r5(10 + rp * (tr + an) / 60);
@@ -554,7 +562,12 @@ function describir(s, a, F, Z, ctx) {
   }
 
   if (s.dep === "run") {
-    if (tipo === "iniciacion") {
+    if (tipo === "test") {
+      out.t = "🎯 Test de 5 km";
+      out.z = "A tope, pero con ritmo constante";
+      out.p = [`Calentamiento ${wu}' suave + movilidad + 3 progresivos de 20''`, "5 km a tope, lo más constante posible (sal un poco por debajo de tu ritmo y acelera al final)", "Vuelta a la calma 10' muy suave"];
+      out.n = "Registra el tiempo exacto (o sube el archivo del reloj): con él se recalculan todos tus ritmos de entreno.";
+    } else if (tipo === "iniciacion") {
       const w = Math.min(ctx.semanaNum, INICIACION.length), [tr, an, rp] = INICIACION[w - 1];
       const ritmo = Z.ritmos ? `${fmtRitmo(Z.ritmos[1][0])}-${fmtRitmo(Z.ritmos[0][1])} /km` : "";
       out.t = rp > 1 ? `Correr y andar · ${rp} × (${minSeg(tr)} + ${minSeg(an)})` : `Correr ${minSeg(tr)} seguidos`;
@@ -758,7 +771,7 @@ function fuerza(s, a, F, ctx) {
    Nutrición
    ========================================================= */
 const MET = {
-  run: { largo: 9.5, calidad: 11, suave: 9, recuperacion: 7, activacion: 8, competicion: 11.5, readapt: 6, iniciacion: 5.5 },
+  run: { largo: 9.5, calidad: 11, suave: 9, recuperacion: 7, activacion: 8, competicion: 11.5, readapt: 6, iniciacion: 5.5, test: 11.5 },
   bike: { largo: 7.5, calidad: 9.5, suave: 7, recuperacion: 5, transicion: 8.5, activacion: 6.5, competicion: 9 },
   swim: { tecnica: 7, calidad: 9, suave: 7.5, recuperacion: 6, activacion: 6, competicion: 9 },
   fuerza: { fuerza: 5 }, movilidad: { movilidad: 2.5 }, carrera: { competicion: 10 }
@@ -768,7 +781,7 @@ export function cargaDia(ses, objetivo) {
   if (!reales.length) return "descanso";
   const tot = reales.reduce((t, s) => t + (+s.min || 0), 0);
   if (reales.some(s => s.tipo === "competicion" && s.carrera?.prioridad !== "C") || reales.some(s => s.tipo === "largo" && s.min >= 90) || tot >= 150) return "alta";
-  if (reales.some(s => ["calidad", "transicion", "largo", "competicion"].includes(s.tipo)) || tot >= 75) return "media";
+  if (reales.some(s => ["calidad", "transicion", "largo", "competicion", "test"].includes(s.tipo)) || tot >= 75) return "media";
   if (objetivo === "musculo" && reales.some(s => s.dep === "fuerza" && s.min >= 50)) return "media";
   return "baja";
 }
@@ -857,7 +870,7 @@ export function menuDia(a, ses, carga, cargaSig, semilla) {
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
 /** Versión del generador: si cambia, las semanas futuras sin cambios a mano se rehacen solas. */
-export const MOTOR_V = 3;
+export const MOTOR_V = 4;
 export function generarSemana(a, lunes) {
   a = efectivo(a);
   const ctx = contexto(a, lunes);
@@ -869,7 +882,9 @@ export function generarSemana(a, lunes) {
   const dias = semana.map(dia => ({
     ses: dia.map(s => {
       const d = describir(s, a, F, Z, ctx);
-      return { id: uid(8), dep: s.dep, tipo: s.tipo, min: s.min, t: d.t, z: d.z, p: d.p, n: d.n || "", ej: d.ej || null, carrera: s.carrera || null };
+      const zo = s.dep === "run" ? { suave: 2, largo: 2, recuperacion: 1 }[s.tipo] : null;
+      const obj = zo ? { zona: zo, ritmo: Z.ritmos ? Z.ritmos[zo - 1].map(Math.round) : null, fc: Z.fc[zo - 1] } : null;
+      return { id: uid(8), dep: s.dep, tipo: s.tipo, min: s.min, t: d.t, z: d.z, p: d.p, n: d.n || "", ej: d.ej || null, carrera: s.carrera || null, obj };
     })
   }));
   const fase = FASES[F.clave];
