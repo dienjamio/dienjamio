@@ -1,11 +1,12 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141518";
-import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141518";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT } from "./vista.js?v=202611141518";
-import { leerTrack, prevision } from "./carrera.js?v=202611141518";
-import { calcProgreso } from "./progreso.js?v=202611141518";
-import * as A from "./almacen.js?v=202611141518";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141518";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141530";
+import { generarSemana, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141530";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio } from "./vista.js?v=202611141530";
+import { BIBLIO } from "./biblioteca.js?v=202611141530";
+import { leerTrack, prevision } from "./carrera.js?v=202611141530";
+import { calcProgreso } from "./progreso.js?v=202611141530";
+import * as A from "./almacen.js?v=202611141530";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141530";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -13,6 +14,8 @@ let editando = null;        // deportista en el formulario (null = nuevo)
 let sub = "semana";
 let lunesVista = lunesDe(hoy());
 let archivos = [];
+let ajustes = {};           // plantillas, vídeos propios y presentación del entrenador
+let subH = "presentacion";
 
 /* =========================================================
    Arranque
@@ -61,6 +64,7 @@ function pantallaEntrar() {
 }
 
 async function cargarLista() {
+  try { ajustes = await A.leerAjustes() || {}; } catch (e) { ajustes = {}; }
   atletas = await A.listar();
   if (!A.nube && !atletas.length) await migrarV1();
   if (A.nube && !atletas.length) await subirLocales();
@@ -300,6 +304,7 @@ async function publicar(a) {
       carreras: (a.carreras || []).filter(c => c.fecha >= sumaDias(hoy(), -30)).map(c => ({ id: c.id, nombre: c.nombre, fecha: c.fecha, prueba: c.prueba, prioridad: c.prioridad, objetivo: c.objetivo || "", lugar: c.lugar || "", estrategia: c.estrategia || "", ritmoObjetivo: c.ritmoObjetivo || "",
         track: c.track ? { dist: c.track.dist, sube: c.track.sube, baja: c.track.baja, kms: c.track.kms, perfil: c.track.perfil } : null, prev: prevision(c, Z) })),
       progreso,
+      videos: ajustes.videos || {},
       zonas: { fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo },
       semanas
     });
@@ -350,6 +355,7 @@ function pintarAtleta() {
         <button class="btn pri mini" data-acc="copiar-enlace" ${A.nube ? "" : "disabled"}>🔗 Copiar enlace</button>
         <button class="btn sec mini" data-acc="compartir" ${A.nube ? "" : "disabled"}>${a.telefono ? "💬 Enviar por WhatsApp" : "📤 Enviar"}</button>
         <a class="btn sec mini" href="${A.nube ? esc(enlace(a)) : "#"}" target="_blank" rel="noopener" ${A.nube ? "" : 'aria-disabled="true"'}>👁️ Ver como él</a>
+        ${a.telefono && A.nube ? `<button class="btn sec mini" data-acc="avisar">📣 Avisar de cambios</button>` : ""}
       </div>
     </div>`;
   $$("#subtabs [data-sub]").forEach(b => b.setAttribute("aria-selected", b.dataset.sub === sub));
@@ -430,6 +436,108 @@ function htmlNovedades(a) {
     return `<li>🏁 Propone la carrera <b>${esc(x.nombre)}</b> (${fechaCorta(x.fecha)}) → mírala en «Carreras»</li>`;
   }).join("");
   return `<div class="novedades"><div class="nov-cab"><b>🔔 Novedades</b><button class="btn sec mini" data-acc="visto">Marcar como visto</button></div><ul>${lin}</ul></div>`;
+}
+
+/* =========================================================
+   Herramientas: presentación, plantillas y biblioteca
+   ========================================================= */
+const PLANTILLAS_BASE = [
+  { nombre: "Rodaje Z2 + progresivos", dep: "run", t: "Rodaje suave + progresivos", min: 30, z: "Z2", p: ["20' de rodaje en Z2", "4 progresivos de 50'' (de suave a rápido) con 1' andando o trotando entre ellos", "5' de vuelta a la calma"] },
+  { nombre: "Series 6 × 1000 m", dep: "run", t: "Series 6 × 1000 m", min: 60, z: "Z4", p: ["Calentamiento 15' en Z1-Z2 + 3 progresivos", "6 × 1000 m a ritmo 10 km, recuperando 90'' trotando", "Vuelta a la calma 10' en Z1"] },
+  { nombre: "Fartlek 8 × 1'", dep: "run", t: "Fartlek", min: 45, z: "Z4", p: ["Calentamiento 15' suave", "8 × (1' fuerte / 1' suave)", "Vuelta a la calma 10'"] },
+  { nombre: "Cuestas 8 × 45''", dep: "run", t: "Cuestas", min: 50, z: "Z5", p: ["Calentamiento 15' suave", "8 × 45'' subiendo fuerte, bajada trotando", "Vuelta a la calma 10'"] },
+  { nombre: "Tempo 3 × 10'", dep: "run", t: "Tempo", min: 60, z: "Z3-Z4", p: ["Calentamiento 15'", "3 × 10' en Z4 con 2' de trote", "Vuelta a la calma 10'"] },
+  { nombre: "Tirada larga progresiva", dep: "run", t: "Tirada larga progresiva", min: 90, z: "Z2 → Z3", p: ["60' en Z2", "20' en Z3", "10' suave para terminar"], n: "Lleva agua y algo de hidratos." },
+  { nombre: "Bici: sweet spot 3 × 10'", dep: "bike", t: "Sweet spot", min: 60, z: "Z3-Z4", p: ["Calentamiento 15' progresivo", "3 × 10' al 88-93 % del FTP con 5' suaves", "Vuelta a la calma 10'"] },
+  { nombre: "Core exprés 20'", dep: "fuerza", t: "Core exprés", min: 20, z: "3 vueltas", p: ["3 vueltas seguidas, 1' de descanso entre vueltas"], ej: [{ n: "Plancha frontal 40''", s: "3 series" }, { n: "Plancha lateral 30''/lado", s: "3 series" }, { n: "Dead bug (10 por lado)", s: "3 series" }, { n: "Puente de glúteo", s: "3 × 15" }] },
+  { nombre: "Movilidad 20'", dep: "movilidad", t: "Movilidad", min: 20, z: "Suave", p: ["Movilidad de tobillo, cadera y columna (10')", "Estiramientos suaves (10')"] }
+];
+const plantillas = () => [...(ajustes.plantillas || []).map(p => ({ ...p, propia: true })), ...PLANTILLAS_BASE];
+
+function pintarHerr() {
+  $$("#subherr [data-herr]").forEach(b => b.setAttribute("aria-selected", b.dataset.herr === subH));
+  const el = $("#herr");
+  if (subH === "plantillas") {
+    el.innerHTML = `<article class="dia"><div class="dia-cab"><h3>🧩 Plantillas de sesiones</h3></div>
+      <p class="ayuda">Para meter tus entrenos favoritos con un clic: en la semana de un deportista, pulsa «＋ Añadir sesión» o «✎ Cambiar» y elige la plantilla arriba. Para crear una, escribe la sesión allí y pulsa «⭐ Guardar como plantilla».</p>
+      ${plantillas().map((p, i) => `<div class="plantilla"><div><b>${DEP[p.dep]?.i || ""} ${esc(p.nombre)}</b> <span class="small">· ${fmtMin(p.min)}${p.z ? " · " + esc(p.z) : ""}${p.propia ? " · tuya" : " · de serie"}</span>
+        <div class="small muted">${esc((p.p || []).join(" · "))}${p.ej ? esc(" · " + p.ej.map(x => x.n).join(", ")) : ""}</div></div>
+        ${p.propia ? `<button class="quita" data-acc="borrar-plantilla" data-i="${i}" aria-label="Borrar">✕</button>` : ""}</div>`).join("")}
+    </article>`;
+  } else if (subH === "biblioteca") {
+    const v = ajustes.videos || {};
+    el.innerHTML = `<article class="dia"><div class="dia-cab"><h3>🏋️ Biblioteca de ejercicios</h3></div>
+      <p class="ayuda">Tus deportistas ven esta ficha al pulsar un ejercicio en su sesión de fuerza. Si pegas el enlace de <b>tu propio vídeo</b> (YouTube, Instagram…), verán el tuyo; si no, una búsqueda de vídeos de la técnica.</p>
+      ${BIBLIO.map(x => `<div class="biblio"><b>${esc(x.n)}</b><p class="small">${esc(x.como)} <span class="txt-alerta">Ojo: ${esc(x.ojo)}</span></p>
+        <input type="url" data-video="${x.id}" value="${esc(v[x.id] || "")}" placeholder="Enlace a tu vídeo (opcional)"></div>`).join("")}
+      <div class="acciones"><button class="btn pri" data-acc="guardar-videos">Guardar vídeos</button></div>
+    </article>`;
+  } else {
+    const p = ajustes.presentacion || {};
+    const url = new URL("conoceme.html", location.href).href;
+    el.innerHTML = `<article class="dia"><div class="dia-cab"><h3>⭐ Mi presentación</h3></div>
+      <p class="ayuda">Tu página pública para que te conozcan: quién eres, cómo trabajas y cómo contactarte. Mándala a quien te pregunte o ponla en tu Instagram.</p>
+      ${A.nube ? `<div class="enlace"><span class="lbl">Tu página</span><code>${esc(url)}</code>
+        <div class="fila"><button class="btn pri mini" data-acc="copiar-pres">🔗 Copiar enlace</button><a class="btn sec mini" href="${esc(url)}" target="_blank" rel="noopener">👁️ Ver mi página</a></div></div>` : `<p class="alerta">La página pública funciona al conectar Firebase.</p>`}
+      <form id="f-pres" class="pres" autocomplete="off">
+        <div class="g2"><label>Tu nombre <input name="nombre" value="${esc(p.nombre || "")}" placeholder="Ej.: Diego Enjamio"></label>
+        <label>Frase de presentación <input name="titular" value="${esc(p.titular || "")}" placeholder="Ej.: Entrenador de running y triatlón"></label></div>
+        <div class="foto-pres">${p.foto ? `<img src="${p.foto}" alt="">` : ""}<label class="btn sec mini">📷 ${p.foto ? "Cambiar" : "Subir"} foto <input type="file" id="f-foto-pres" accept="image/*" hidden></label></div>
+        <label>Sobre mí <textarea name="sobre" rows="4" placeholder="Tu experiencia, tus títulos, tus carreras, por qué entrenas…">${esc(p.sobre || "")}</textarea></label>
+        <label>Cómo trabajo (un paso por línea) <textarea name="pasos" rows="4" placeholder="Hablamos de tu objetivo y tu disponibilidad
+Analizo tus datos de Garmin, Strava o Polar
+Te preparo cada semana tus entrenos y tu menú
+Me cuentas cómo te ha ido y ajustamos">${esc((p.pasos || []).join("\n"))}</textarea></label>
+        <label>Servicios (uno por línea: nombre | precio | descripción) <textarea name="servicios" rows="3" placeholder="Plan mensual | 40 €/mes | Entrenos y menú semanales con seguimiento
+Preparación de carrera | 60 € | 12 semanas para tu objetivo">${esc((p.servicios || []).map(x => [x.n, x.precio, x.d].join(" | ")).join("\n"))}</textarea></label>
+        <label>Deportes <input name="deportes" value="${esc(p.deportes || "")}" placeholder="Running, trail, bici, triatlón, fuerza"></label>
+        <label>Opiniones de deportistas (una por línea: texto | nombre) <textarea name="opiniones" rows="3" placeholder="Bajé de 50 minutos en el 10K por primera vez | Laura">${esc((p.opiniones || []).map(x => [x.t, x.n].join(" | ")).join("\n"))}</textarea></label>
+        <div class="g2"><label>WhatsApp <input name="telefono" type="tel" value="${esc(p.telefono || "")}" placeholder="Tu teléfono"></label>
+        <label>Instagram <input name="instagram" value="${esc(p.instagram || "")}" placeholder="@tuusuario"></label>
+        <label>Correo <input name="email" type="email" value="${esc(p.email || "")}"></label>
+        <label>Zona <input name="zona" value="${esc(p.zona || "")}" placeholder="Ej.: Online · A Coruña"></label></div>
+        <div class="acciones"><button type="submit" class="btn pri">Guardar y publicar mi página</button></div>
+      </form>
+    </article>`;
+    $("#f-foto-pres").addEventListener("change", async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try { ajustes.presentacion = { ...(ajustes.presentacion || {}), ...leerPres(), foto: await comprimirImagen(f, 700, 0.8) }; pintarHerr(); } catch (err) { toast(err.message); }
+    });
+    $("#f-pres").addEventListener("submit", async e => {
+      e.preventDefault();
+      ajustes.presentacion = { ...(ajustes.presentacion || {}), ...leerPres() };
+      try {
+        await A.guardarAjustes(ajustes);
+        if (A.nube) await A.publicar({ token: "entrenador" }, ajustes.presentacion);
+        toast(A.nube ? "Tu página está publicada" : "Guardado (se publicará al conectar Firebase)");
+      } catch (err) { toast("No se ha podido guardar: " + (err.code || err.message)); }
+    });
+  }
+}
+function leerPres() {
+  const f = $("#f-pres"), v = n => f.elements[n].value.trim(), lineas = n => v(n).split("\n").map(x => x.trim()).filter(Boolean);
+  return {
+    nombre: v("nombre"), titular: v("titular"), sobre: v("sobre"), pasos: lineas("pasos"), deportes: v("deportes"),
+    servicios: lineas("servicios").map(x => { const [n, precio, d] = x.split("|").map(y => (y || "").trim()); return { n, precio, d }; }),
+    opiniones: lineas("opiniones").map(x => { const [t, n] = x.split("|").map(y => (y || "").trim()); return { t, n }; }),
+    telefono: v("telefono"), instagram: v("instagram").replace(/^@/, ""), email: v("email"), zona: v("zona")
+  };
+}
+async function accionHerr(t) {
+  const acc = t.dataset.acc;
+  if (acc === "borrar-plantilla") {
+    const p = plantillas()[+t.dataset.i]; if (!p?.propia || !confirm(`¿Borrar la plantilla «${p.nombre}»?`)) return true;
+    ajustes.plantillas = (ajustes.plantillas || []).filter(x => x.nombre !== p.nombre);
+    await A.guardarAjustes(ajustes); pintarHerr(); return true;
+  }
+  if (acc === "guardar-videos") {
+    ajustes.videos = Object.fromEntries($$("[data-video]").map(i => [i.dataset.video, i.value.trim()]).filter(x => x[1]));
+    await A.guardarAjustes(ajustes);
+    for (const a of atletas) if (a.semanas) await publicar(a);
+    toast("Vídeos guardados. Tus deportistas los verán en sus ejercicios."); return true;
+  }
+  if (acc === "copiar-pres") { const u = new URL("conoceme.html", location.href).href; try { await navigator.clipboard.writeText(u); toast("Enlace copiado"); } catch (e) { prompt("Copia el enlace:", u); } return true; }
+  return false;
 }
 
 /* ---------------- De dónde sale cada dato ---------------- */
@@ -737,6 +845,7 @@ function abrirSesion(dia, id) {
   f.elements.p.value = (s.p || []).join("\n"); f.elements.n.value = s.n || "";
   f.elements.ej.value = (s.ej || []).map(e => `${e.n} | ${e.s}`).join("\n");
   $("#ses-borrar").hidden = !id;
+  $("#sel-plantilla").innerHTML = `<option value="">🧩 Usar una plantilla…</option>` + plantillas().map((p, i) => `<option value="${i}">${esc(p.nombre)}</option>`).join("");
   $("#dlg-ses").querySelector("h3").textContent = id ? "Cambiar sesión" : `Nueva sesión · ${DIAS[dia]}`;
   $("#dlg-ses").returnValue = "";
   $("#dlg-ses").showModal();
@@ -776,17 +885,21 @@ async function cerrarSesion(accion) {
    ========================================================= */
 function enlazar() {
   document.addEventListener("click", async e => {
-    const t = e.target.closest("[data-vista],[data-vista-ir],[data-abrir],[data-sub],[data-acc]");
+    const t = e.target.closest("[data-vista],[data-vista-ir],[data-abrir],[data-sub],[data-herr],[data-acc]");
     if (!t) return;
     if (t.dataset.vista || t.dataset.vistaIr) {
       const v = t.dataset.vista || t.dataset.vistaIr;
       if (v === "nuevo") return formNuevo();
       if (v === "atleta") { vista("atleta"); return pintarAtleta(); }
+      if (v === "herr") { vista("herr"); return pintarHerr(); }
       history.replaceState(null, "", location.pathname);
       return vista(v);
     }
     if (t.dataset.abrir) return abrir(t.dataset.abrir);
     if (t.dataset.sub) { sub = t.dataset.sub; return pintarAtleta(); }
+    if (t.dataset.herr) { subH = t.dataset.herr; return pintarHerr(); }
+    if (t.dataset.acc === "ejercicio") return mostrarEjercicio(t.dataset.n, ajustes.videos || {});
+    if (await accionHerr(t)) return;
     const acc = t.dataset.acc, a = actual;
     if (acc === "ficha") return formEditar();
     if (acc === "sem-ant" || acc === "sem-sig") { lunesVista = sumaDias(lunesVista, acc === "sem-ant" ? -7 : 7); if (lunesVista >= lunesDe(hoy()) && !a.semanas[lunesVista]) { a.semanas[lunesVista] = generarSemana(a, lunesVista); await A.guardarSemana(a, a.semanas[lunesVista]); await publicar(a); } return pintarAtleta(); }
@@ -804,6 +917,11 @@ function enlazar() {
       const snap = a.semanas[lunesVista], i = +t.dataset.dia;
       snap.dias[i].menuVar = (snap.dias[i].menuVar || 0) + 1;
       recalcular(a, snap, i); await A.guardarSemana(a, snap); await publicar(a); return pintarAtleta();
+    }
+    if (acc === "avisar") {
+      let tel = a.telefono.replace(/\D/g, ""); if (tel.length === 9) tel = "34" + tel;
+      window.open(`https://wa.me/${tel}?text=${encodeURIComponent(`Hola ${a.nombre.split(" ")[0]}, te he actualizado el plan. Échale un ojo 👇\n${enlace(a)}`)}`, "_blank");
+      return;
     }
     if (acc === "visto") {
       for (const x of nuevos(a)) { x.visto = true; try { await A.marcarAporte(a.token, x.id, { visto: true }); } catch (e) { } }
@@ -877,6 +995,23 @@ function enlazar() {
     pintarLista(); vista("lista"); toast("Deportista borrado");
   });
   $("#dlg-ses").addEventListener("close", () => cerrarSesion($("#dlg-ses").returnValue));
+  $("#sel-plantilla").addEventListener("change", e => {
+    const p = plantillas()[+e.target.value]; if (!p) return;
+    const f = $("#f-ses");
+    f.elements.dep.value = p.dep; f.elements.t.value = p.t; f.elements.min.value = p.min; f.elements.z.value = p.z || "";
+    f.elements.p.value = (p.p || []).join("\n"); f.elements.n.value = p.n || ""; f.elements.ej.value = (p.ej || []).map(x => `${x.n} | ${x.s}`).join("\n");
+  });
+  $("#guardar-plantilla").addEventListener("click", async () => {
+    const f = $("#f-ses");
+    const nombre = prompt("Nombre de la plantilla:", f.elements.t.value.trim());
+    if (!nombre) return;
+    const p = { nombre, dep: f.elements.dep.value, t: f.elements.t.value.trim(), min: +f.elements.min.value || 45, z: f.elements.z.value.trim(),
+      p: f.elements.p.value.split("\n").map(x => x.trim()).filter(Boolean), n: f.elements.n.value.trim(),
+      ej: f.elements.ej.value.split("\n").map(x => x.trim()).filter(Boolean).map(x => { const [n, s_] = x.split("|"); return { n: n.trim(), s: (s_ || "").trim() }; }) };
+    ajustes.plantillas = [...(ajustes.plantillas || []), p];
+    await A.guardarAjustes(ajustes);
+    toast(`Plantilla «${nombre}» guardada`);
+  });
   $("#dlg-car").addEventListener("close", () => cerrarCarrera($("#dlg-car").returnValue));
   $("#f-track").addEventListener("change", async e => {
     const f = e.target.files[0]; e.target.value = "";

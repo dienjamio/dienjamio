@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="img/logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="img/icon-192.png">
-<link rel="stylesheet" href="styles.css?v=202611141518">
+<link rel="stylesheet" href="styles.css?v=202611141530">
 </head>
 <body>
 <header class="top no-print">
@@ -20,6 +20,7 @@
 <nav class="pestanas no-print" id="pestanas">
   <button data-vista="lista" aria-selected="true">👥 Deportistas</button>
   <button data-vista="nuevo">＋ Nuevo deportista</button>
+  <button data-vista="herr">🧰 Herramientas</button>
   <button data-vista="atleta" id="tab-atleta" hidden></button>
 </nav>
 
@@ -154,6 +155,16 @@
     </form>
   </section>
 
+  <!-- Herramientas del entrenador -->
+  <section id="v-herr" class="vista" hidden>
+    <nav class="subtabs" id="subherr">
+      <button data-herr="presentacion" aria-selected="true">⭐ Mi presentación</button>
+      <button data-herr="plantillas">🧩 Plantillas</button>
+      <button data-herr="biblioteca">🏋️ Biblioteca</button>
+    </nav>
+    <div id="herr"></div>
+  </section>
+
   <!-- Deportista -->
   <section id="v-atleta" class="vista" hidden>
     <div class="atleta-cab panel no-print" id="atleta-cab"></div>
@@ -175,6 +186,7 @@
 <dialog id="dlg-ses" class="hoja">
   <form method="dialog" id="f-ses">
     <h3>Cambiar sesión</h3>
+    <div class="fila plantilla-f"><select name="plantilla" id="sel-plantilla"><option value="">🧩 Usar una plantilla…</option></select><button type="button" class="btn sec mini" id="guardar-plantilla">⭐ Guardar como plantilla</button></div>
     <div class="g2">
       <label>Día <select name="dia"></select></label>
       <label>Deporte <select name="dep">
@@ -238,6 +250,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/app.js?v=202611141518"></script>
+<script type="module" src="js/app.js?v=202611141530"></script>
 </body>
 </html>

@@ -329,3 +329,47 @@ svg.grafico .base{stroke:var(--line)}
 #reg-foto img{max-height:160px;max-width:100%;border-radius:10px;margin-top:8px;display:block}
 .barra-inf{grid-template-columns:repeat(5,1fr)}
 @media (max-width:560px){.prev-det{margin-left:0}.sens small{font-size:9px}}
+
+/* ---------- v4: herramientas, biblioteca, presentación ---------- */
+.ej-n{background:none;border:0;padding:0;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.ej-n span{color:var(--accent);font-size:12px}
+.plantilla-f{margin:6px 0 4px}
+.plantilla-f select{flex:1;min-width:0;margin:0}
+.plantilla,.biblio{padding:10px 0;border-top:1px solid var(--line)}
+.plantilla{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.biblio p{margin:4px 0}
+.foto-pres{display:flex;align-items:center;gap:12px;margin-top:10px}
+.foto-pres img{width:72px;height:72px;border-radius:50%;object-fit:cover}
+body.landing{background:radial-gradient(1200px 500px at 50% -200px,#1d2406,#000 60%)}
+.landing main{max-width:720px;margin:0 auto;padding:0 16px 60px}
+.hero{text-align:center;padding:28px 0 18px}
+.marca-l{display:flex;align-items:center;justify-content:center;gap:10px;font-weight:900;letter-spacing:.06em;margin-bottom:22px}
+.marca-l img{border-radius:10px}
+.marca-l b{color:var(--accent);font-weight:800;letter-spacing:.2em;font-size:12px}
+.logo-hero{width:96px;height:96px;border-radius:22px}
+.hero .foto{width:132px;height:132px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 4px var(--accent);margin-bottom:14px}
+.hero h1{font-size:34px;font-weight:900;letter-spacing:.01em;margin:4px 0}
+.titular{font-size:18px;color:var(--ink2);margin:6px 0}
+.zona-l{color:var(--ink3);margin:4px 0 10px}
+.chips-l{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:12px 0 18px}
+.chips-l span{background:var(--paper);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:700}
+.btn.grande{font-size:17px;padding:15px 22px;margin-top:6px}
+.bloque{background:var(--card);border-radius:18px;padding:18px;box-shadow:0 0 0 1px var(--line);margin-top:14px}
+.bloque h2{font-size:20px;margin-bottom:8px}
+.bloque p{color:var(--ink2);margin:6px 0}
+.pasos{margin:0;padding-left:22px}
+.pasos li{margin:8px 0;font-size:16px}
+.pasos li::marker{color:var(--accent);font-weight:900}
+.que{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.que div{background:var(--paper);border-radius:14px;padding:12px}
+.que span{font-size:24px}
+.que b{display:block;margin-top:4px}
+.que p{font-size:14px}
+.servicios{display:grid;gap:10px}
+.serv{background:var(--paper);border-radius:14px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:4px 10px}
+.serv .precio{color:var(--accent);font-weight:900}
+.serv p{grid-column:1/-1;font-size:14px}
+blockquote{margin:10px 0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--paper);border-radius:0 12px 12px 0;font-size:16px}
+cite{display:block;color:var(--ink3);font-style:normal;font-size:13px;margin-top:4px}
+.final{text-align:center}
+.contacto a{color:var(--accent)}

@@ -1,6 +1,7 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141518";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141518";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141530";
+import { infoEjercicio } from "./biblioteca.js?v=202611141530";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ } from "./motor.js?v=202611141530";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -20,7 +21,7 @@ export function htmlRegistro(r) {
 export function htmlSesion(s, ed = false, op = {}) {
   const d = DEP[s.dep] || DEP.run;
   const reg = op.regs?.[s.id];
-  const ej = s.ej && s.ej.length ? `<table class="ej">${s.ej.map(e => `<tr><td>${esc(e.n)}</td><td>${esc(e.s)}</td></tr>`).join("")}</table>` : "";
+  const ej = s.ej && s.ej.length ? `<table class="ej">${s.ej.map(e => `<tr><td><button class="ej-n" data-acc="ejercicio" data-n="${esc(e.n)}">${esc(e.n)} <span aria-hidden="true">ⓘ</span></button></td><td>${esc(e.s)}</td></tr>`).join("")}</table>` : "";
   return `<div class="ses ${esc(s.dep)}${s.tipo === "competicion" ? " comp" : ""}">
     <div class="ses-cab">
       <h4>${s.tipo === "competicion" ? "" : d.i + " "}${esc(s.t)}${s.editada ? ' <span class="mano" title="Cambiado a mano">✎</span>' : ""}</h4>
@@ -187,4 +188,16 @@ export function htmlProgreso(series) {
     <div class="sens">${series.map(s => `<div title="${s.sensacion ? SENS_TXT[s.sensacion] : "Sin valorar"}"><span>${s.sensacion ? SENS[s.sensacion] : "·"}</span><small>${fechaCorta(s.lunes).split(" ")[0]}</small></div>`).join("")}</div>
     ${conDatos.length ? "" : `<p class="muted small">Cuando registre entrenos o subas sus actividades, aquí se irá viendo su evolución.</p>`}
   </article>`;
+}
+
+/* ---------- Ficha de un ejercicio (biblioteca) ---------- */
+export function mostrarEjercicio(nombre, videos = {}) {
+  const i = infoEjercicio(nombre, videos);
+  let d = document.getElementById("dlg-ej");
+  if (!d) { d = document.createElement("dialog"); d.id = "dlg-ej"; d.className = "hoja"; document.body.append(d); d.addEventListener("click", e => { if (e.target === d || e.target.closest("[data-cerrar]")) d.close(); }); }
+  d.innerHTML = `<h3>🏋️ ${esc(i.n)}</h3>
+    ${i.como ? `<p><b>Cómo se hace:</b> ${esc(i.como)}</p>` : ""}
+    ${i.ojo ? `<p class="txt-alerta"><b>Ojo:</b> ${esc(i.ojo)}</p>` : ""}
+    <div class="acciones fila"><a class="btn pri mini" href="${esc(i.video)}" target="_blank" rel="noopener">▶ ${i.propio ? "Ver el vídeo de tu entrenador" : "Ver vídeos de la técnica"}</a><span class="sp"></span><button class="btn sec mini" data-cerrar>Cerrar</button></div>`;
+  d.showModal();
 }

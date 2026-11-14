@@ -4,7 +4,7 @@
      entrenadores/{uid}/deportistas/{id}/semanas/{lunes}   plan de cada semana
      entrenadores/{uid}/deportistas/{id}/archivos/{fid}    PDF e informes (hasta ~700 KB)
      publico/{token}                                 lo que ve el deportista con su enlace */
-import { firebaseConfig } from "./firebase-config.js?v=202611141518";
+import { firebaseConfig } from "./firebase-config.js?v=202611141530";
 
 const V = "10.12.2";
 const SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}.js`;
@@ -146,6 +146,17 @@ export async function marcarAporte(token, id, cambios) {
 export async function borrarAporte(token, id) {
   await cargarFirebase();
   await fb.deleteDoc(fb.doc(db, "publico", token, "aportes", id));
+}
+
+/* Ajustes del entrenador: plantillas de sesiones, vídeos propios y presentación */
+export async function leerAjustes() {
+  if (!nube) return lget("entrenador.v2.ajustes", {});
+  const d = await fb.getDoc(fb.doc(db, "entrenadores", usuario.uid, "ajustes", "general"));
+  return d.exists() ? leer(d.data()) : {};
+}
+export async function guardarAjustes(o) {
+  if (!nube) { lset("entrenador.v2.ajustes", o); return; }
+  await fb.setDoc(fb.doc(db, "entrenadores", usuario.uid, "ajustes", "general"), aDoc(o));
 }
 
 /* Lo guardado en este navegador antes de conectar la nube */

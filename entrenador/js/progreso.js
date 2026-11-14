@@ -1,5 +1,5 @@
 /* Progreso semana a semana: lo planificado frente a lo hecho (registros del deportista y actividades subidas). */
-import { hoy, lunesDe, sumaDias } from "./util.js?v=202611141518";
+import { hoy, lunesDe, sumaDias } from "./util.js?v=202611141530";
 
 /**
  * semanas: { lunes: instantánea } · aportes: buzón del deportista · actividades: las importadas.

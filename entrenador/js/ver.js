@@ -1,10 +1,10 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141518";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT } from "./vista.js?v=202611141518";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte } from "./almacen.js?v=202611141518";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141518";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141518";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141530";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio } from "./vista.js?v=202611141530";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte } from "./almacen.js?v=202611141530";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141530";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141530";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -107,6 +107,7 @@ async function clic(e) {
   if (b.dataset.nav) { const ls = semanas(), i = ls.indexOf(lunes) + (+b.dataset.nav); if (ls[i]) { lunes = ls[i]; pintar(); } return; }
   const acc = b.dataset.acc;
   if (acc === "ir-carreras") { v = "carreras"; return pintar(); }
+  if (acc === "ejercicio") return mostrarEjercicio(b.dataset.n, P.videos || {});
   if (acc === "registrar") {
     const r = buscarSesion(b.dataset.id); if (!r) return;
     regSes = r; fotoNueva = undefined;
