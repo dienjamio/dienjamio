@@ -587,3 +587,35 @@ body.cinta .c-calle,body:not(.cinta) .c-cinta{display:none}
 .inf-nota{color:#555;font-size:11.5px}
 .inf-com{background:#F4F8E0;border-radius:10px;padding:8px 12px}
 .inf-pie{margin-top:18px;border-top:1px solid #ccc;padding-top:6px;color:#777;font-size:10.5px}
+
+/* v12 · Entreno paso a paso */
+.det-ses{margin:10px 0 4px;border:1px solid var(--line);border-radius:12px;background:var(--bg);overflow:hidden}
+.det-ses>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:800;font-size:14px;color:var(--accent);display:flex;justify-content:space-between;align-items:center}
+.det-ses>summary::-webkit-details-marker{display:none}
+.det-ses>summary::after{content:"▾";transition:transform .2s}
+.det-ses[open]>summary::after{transform:rotate(180deg)}
+.det-ses[open]>summary{border-bottom:1px solid var(--line)}
+.det-tot{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px 0}
+.det-tot span{background:var(--paper);border-radius:99px;padding:3px 10px;font-size:12.5px;font-weight:700}
+.pp-sec{padding:8px 12px}
+.pp-sec h5{margin:0 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink2)}
+.pp-sec p,.pp-sec ul{margin:0;font-size:14px;line-height:1.45}
+.pp-sec ul{padding-left:18px}.pp-sec li{margin:3px 0}
+.pp-para p{color:var(--ink)}
+.pp-b{background:var(--paper);margin:6px 12px;border-radius:10px}
+.pasos{list-style:none;margin:8px 0 0;padding:0 12px;counter-reset:paso}
+.pp{position:relative;border-left:3px solid var(--line);padding:2px 0 12px 14px;margin-left:6px}
+.pp::before{content:"";position:absolute;left:-7px;top:4px;width:11px;height:11px;border-radius:50%;background:var(--ink3)}
+.pp-main{border-left-color:var(--run)}.pp-main::before{background:var(--run)}
+.pp-cab{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14.5px}
+.pp-cab span{color:var(--ink2);font-size:13px;font-variant-numeric:tabular-nums}
+.pp-cuerpo{margin-top:4px;display:flex;flex-direction:column;gap:4px}
+.pp-k{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);font-weight:700}
+.pp-r{font-size:18px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--accent)}
+.pp-rep{font-size:16px}
+.pp-chips{display:flex;gap:6px;flex-wrap:wrap}
+.pp-chips span{font-size:12.5px;background:var(--paper);border-radius:8px;padding:2px 8px}
+.pp-s{margin:0;font-size:13px;color:var(--ink2);font-style:italic}
+.pp-rec{font-size:13.5px;background:var(--paper);border-radius:8px;padding:6px 8px}
+.pp-x{margin:2px 0 0;font-size:13px;color:var(--ink2)}
+@media print{.det-ses{display:none}}

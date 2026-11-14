@@ -3,8 +3,8 @@
    1) Carreras y tests registrados (tiempo + distancia reales).
    2) Ritmo frente a pulso en rodajes continuos: a qué % de la reserva cardiaca va cada ritmo → VO2máx (VDOT).
    3) Mejores tramos de 5 km o más dentro de los entrenos (cota mínima: casi nunca son a tope). */
-import { vdotDe, tiempoVdot } from "./motor.js?v=202611141916";
-import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611141916";
+import { vdotDe, tiempoVdot } from "./motor.js?v=202611141919";
+import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611141919";
 
 const D = { "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 const NOM = { "5k": "5 km", "10k": "10 km", media: "Media maratón", maraton: "Maratón" };

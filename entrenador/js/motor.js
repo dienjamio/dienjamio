@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141916";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611141919";
 
 /* =========================================================
    Catálogos
@@ -177,7 +177,7 @@ export function calcZonas(a) {
       series: rango(r(0.975), 4, 4)
     };
     // zonas de ritmo coherentes con los ritmos con nombre
-    ritmos = [tipos.recuperacion, tipos.rodaje, [tipos.maraton[0] - 6, tipos.maraton[1] + 8], [tipos.umbral[0] - 2, tipos.umbral[1] + 4], [tipos.series[0] - 4, tipos.series[1]]];
+    ritmos = [tipos.recuperacion, tipos.rodaje, tipos.maraton, tipos.umbral, tipos.series];
   }
   let potencia = null;
   if (+a.ftp) potencia = [[0, 0.55], [0.56, 0.75], [0.76, 0.90], [0.91, 1.05], [1.06, 1.20]].map(([lo, hi]) => [Math.round(a.ftp * lo), Math.round(a.ftp * hi)]);
@@ -819,6 +819,9 @@ function describir(s, a, F, Z, ctx) {
     tr = tr.filter(t => t && (t.n || t.min > 0 || t.m));
     out.c = Z.tipos ? { calle: textoTramos(tr, Z, "calle"), cinta: textoTramos(tr, Z, "cinta") } : null;
     out.est = barras(tr, Z);
+    // tramos con su ritmo y pulso ya resueltos, para el «paso a paso» del deportista
+    const res = t => t && ({ ...t, r: Z.tipos?.[t.k] || null, f: ZONA_RITMO[t.k] ? Z.fc[ZONA_RITMO[t.k] - 1] : t.k === "cuesta" ? Z.fc[4] : t.k === "trote" ? Z.fc[0] : null });
+    out.tr = tr.map(t => ({ ...res(t), par: t.par ? res(t.par) : undefined, rr: t.rec ? (Z.tipos?.recuperacion || null) : undefined }));
   }
   if (s.doble) out.n = (out.n ? out.n + " " : "") + "Segunda sesión del día: sepárala 4-6 h de la primera si puedes.";
   if (s.dep === "run" && Z.ritmoEstimado && tipo !== "competicion") out.n = (out.n ? out.n + " " : "") + "Ritmos estimados: guíate sobre todo por las sensaciones y el pulso.";
@@ -994,7 +997,7 @@ export function menuDia(a, ses, carga, cargaSig, semilla) {
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
 /** Versión del generador: si cambia, las semanas futuras sin cambios a mano se rehacen solas. */
-export const MOTOR_V = 5;
+export const MOTOR_V = 6;
 export function generarSemana(a, lunes) {
   a = efectivo(a);
   const ctx = contexto(a, lunes);
@@ -1009,7 +1012,7 @@ export function generarSemana(a, lunes) {
       const zo = s.dep === "run" ? { suave: 2, largo: 2, recuperacion: 1 }[s.tipo] : null;
       const rk = { suave: "rodaje", largo: "tirada", recuperacion: "recuperacion" }[s.tipo];
       const obj = zo ? { zona: zo, ritmo: Z.tipos?.[rk] ? Z.tipos[rk].slice() : Z.ritmos ? Z.ritmos[zo - 1].map(Math.round) : null, fc: Z.fc[zo - 1] } : null;
-      return { id: uid(8), dep: s.dep, tipo: s.tipo, min: s.min, t: d.t, z: d.z, p: d.p, n: d.n || "", ej: d.ej || null, carrera: s.carrera || null, obj, c: d.c || null, est: d.est || null };
+      return { id: uid(8), dep: s.dep, tipo: s.tipo, min: s.min, t: d.t, z: d.z, p: d.p, n: d.n || "", ej: d.ej || null, carrera: s.carrera || null, obj, c: d.c || null, est: d.est || null, tr: d.tr || null };
     })
   }));
   const fase = FASES[F.clave];

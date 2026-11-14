@@ -1,6 +1,6 @@
 /* Informe mensual de un deportista, listo para imprimir o guardar en PDF desde el móvil o el ordenador. */
-import { esc, fmtHoras, fmtRitmo, sumaDias, lunesDe, fechaCorta, hoy } from "./util.js?v=202611141916";
-import { puntuarBien } from "./carga.js?v=202611141916";
+import { esc, fmtHoras, fmtRitmo, sumaDias, lunesDe, fechaCorta, hoy } from "./util.js?v=202611141919";
+import { puntuarBien } from "./carga.js?v=202611141919";
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 export const nombreMes = m => `${MESES[+m.slice(5, 7) - 1]} de ${m.slice(0, 4)}`;

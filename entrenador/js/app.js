@@ -1,17 +1,17 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141916";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141916";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141916";
-import { BIBLIO } from "./biblioteca.js?v=202611141916";
-import { leerTrack, prevision } from "./carrera.js?v=202611141916";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141916";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611141916";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611141916";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611141916";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611141916";
-import { calcProgreso } from "./progreso.js?v=202611141916";
-import * as A from "./almacen.js?v=202611141916";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141916";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141919";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141919";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141919";
+import { BIBLIO } from "./biblioteca.js?v=202611141919";
+import { leerTrack, prevision } from "./carrera.js?v=202611141919";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141919";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611141919";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611141919";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611141919";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611141919";
+import { calcProgreso } from "./progreso.js?v=202611141919";
+import * as A from "./almacen.js?v=202611141919";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141919";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -1215,7 +1215,7 @@ async function cerrarSesion(accion) {
       editada: true };
     if (!s.ej.length) s.ej = null;
     const o = sesEdit.s || {};
-    if (o.dep !== s.dep || o.t !== s.t || o.min !== s.min || (o.p || []).join("\n") !== s.p.join("\n")) { s.c = null; s.est = null; } // la estructura automática ya no vale
+    if (o.dep !== s.dep || o.t !== s.t || o.min !== s.min || (o.p || []).join("\n") !== s.p.join("\n")) { s.c = null; s.est = null; s.tr = null; } // la estructura automática ya no vale
     if (s.tipo === "manual") s.tipo = s.dep === "fuerza" ? "fuerza" : s.min >= 90 ? "largo" : "suave";
     const nuevoDia = +f.elements.dia.value;
     if (i >= 0) lista.splice(i, 1);

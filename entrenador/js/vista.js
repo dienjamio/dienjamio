@@ -1,7 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141916";
-import { infoEjercicio } from "./biblioteca.js?v=202611141916";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611141916";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141919";
+import { htmlDetalle } from "./detalle.js?v=202611141919";
+import { infoEjercicio } from "./biblioteca.js?v=202611141919";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611141919";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -107,6 +108,7 @@ export function htmlSesion(s, ed = false, op = {}) {
     ${s.p && s.p.length ? `<ol>${s.p.map(p => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
     ${ej}
     ${s.n ? `<div class="nota">${esc(s.n)}</div>` : ""}
+    ${htmlDetalle(s, op.abierto)}
     ${htmlRegistro(reg, s)}
     ${s.coment ? `<div class="coment">💬 <b>Tu entrenador:</b> ${esc(s.coment)}</div>` : ""}
     ${ed && reg ? `<div class="ses-acc"><button class="btn sec mini" data-acc="comentar" data-id="${s.id}">💬 ${s.coment ? "Cambiar comentario" : "Comentar"}</button></div>` : ""}
