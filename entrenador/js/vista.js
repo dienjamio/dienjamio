@@ -1,8 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141919";
-import { htmlDetalle } from "./detalle.js?v=202611141919";
-import { infoEjercicio } from "./biblioteca.js?v=202611141919";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611141919";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611141958";
+import { htmlDetalle } from "./detalle.js?v=202611141958";
+import { infoEjercicio } from "./biblioteca.js?v=202611141958";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611141958";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -110,6 +110,7 @@ export function htmlSesion(s, ed = false, op = {}) {
     ${s.n ? `<div class="nota">${esc(s.n)}</div>` : ""}
     ${htmlDetalle(s, op.abierto)}
     ${htmlRegistro(reg, s)}
+    ${op.registrar && reg?.visto ? `<div class="visto-ent">👀 Tu entrenador ha revisado este entreno</div>` : ""}
     ${s.coment ? `<div class="coment">💬 <b>Tu entrenador:</b> ${esc(s.coment)}</div>` : ""}
     ${ed && reg ? `<div class="ses-acc"><button class="btn sec mini" data-acc="comentar" data-id="${s.id}">💬 ${s.coment ? "Cambiar comentario" : "Comentar"}</button></div>` : ""}
     ${ed ? `<div class="ses-acc"><button class="btn sec mini" data-acc="editar-ses" data-id="${s.id}">✎ Cambiar</button></div>` : ""}
@@ -204,7 +205,7 @@ export function htmlCarreraFicha(c, ed = false, prev = null) {
       <b>${esc(c.nombre || PRUEBAS[c.prueba])}</b>
       <span>${PRUEBAS[c.prueba] || ""} · ${c.prioridad} · ${PRIORIDAD[c.prioridad]}${c.lugar ? " · " + esc(c.lugar) : ""}</span>
       <span>${cuando}${c.objetivo ? " · objetivo " + esc(c.objetivo) : ""}</span>
-      ${prev && !prev.falta ? `<span class="prev-l">⏱️ Previsión: <b>${fmtHoras(prev.total)}</b> (${fmtRitmo(prev.ritmoMedio)} /km)${c.track ? ` · ${(c.track.dist / 1000).toFixed(2).replace(".", ",")} km · +${c.track.sube} m` : ""}</span>` : ""}
+      ${prev && !prev.falta ? `<span class="prev-l">${prev.real ? `⏱️ Previsión: <b>${fmtHoras(prev.total)}</b> (${fmtRitmo(prev.ritmoMedio)} /km)` : `🎯 Objetivo: <b>${fmtHoras(prev.obj)}</b>`}${prev.real && prev.obj ? (prev.total <= prev.obj ? " · ✅ objetivo a su alcance" : ` · le faltan ${fmtHoras(prev.total - prev.obj)}`) : ""}${c.track ? ` · ${(c.track.dist / 1000).toFixed(2).replace(".", ",")} km · +${prev.sube} m` : ""}</span>` : ""}
     </div>
     ${ed ? `<div class="cf-acc"><button class="icon-btn" data-acc="editar-carrera" data-id="${c.id}" aria-label="Editar">✎</button></div>` : ""}
   </div>`;
@@ -226,18 +227,30 @@ function svgPerfil(perfil, kms) {
 }
 export function htmlPrevision(c, p) {
   if (!p) return "";
-  if (p.falta) return `<p class="alerta">Para la previsión falta un ritmo: escribe un ritmo objetivo en la carrera o una marca en su ficha.</p>`;
+  if (p.falta) return `<p class="alerta">Para la previsión falta un dato: escribe un tiempo objetivo en la carrera o una marca en su ficha.</p>`;
+  const dif = p.real && p.obj ? p.total - p.obj : null;
+  const veredicto = dif == null ? "" : dif <= 0
+    ? `<div class="veredicto ok">✅ <b>Objetivo a su alcance:</b> su forma actual da ${fmtHoras(-dif)} de margen.</div>`
+    : dif / p.km <= 4 ? `<div class="veredicto ojo">🟡 <b>Objetivo ambicioso pero posible:</b> le faltan ${fmtHoras(dif)} (${Math.round(dif / p.km)} s/km). Con un buen día, buen tiempo y una salida controlada, se puede.</div>`
+    : `<div class="veredicto mal">🔴 <b>Objetivo muy exigente ahora mismo:</b> le faltan ${fmtHoras(dif)} (${Math.round(dif / p.km)} s/km). Mejor salir al ritmo de la previsión y apretar en la segunda mitad si va bien.</div>`;
+  const expl = `<details class="expl"><summary>¿De dónde sale este tiempo?</summary><ul>
+    ${p.real ? `<li><b>Ritmo en llano: ${fmtRitmo(p.base)} /km</b>, calculado con ${esc(p.de)}.</li>` : ""}
+    ${p.costeDesnivel > 1 ? `<li><b>Perfil (+${p.sube} m / −${p.baja} m): ${p.costeDesnivel >= 0 ? "+" : "−"}${fmtHoras(Math.abs(p.costeDesnivel))}</b>. Cada 1 % de subida cuesta ~3,3 % más; la bajada devuelve menos de lo que quita la subida.</li>` : c.track ? `<li>Perfil prácticamente llano: no añade tiempo.</li>` : `<li>Sin track: calculado en llano. Sube el GPX del recorrido para afinarlo con las cuestas.</li>`}
+    ${p.costeSalida > 0.5 ? `<li><b>Salida controlada: +${Math.round(p.costeSalida)} s</b> en el primer km (se recuperan con creces al no quemarse).</li>` : ""}
+    ${p.obj ? `<li><b>Objetivo ${fmtHoras(p.obj)}</b> = ${fmtRitmo(p.ritmoObjMedio)} /km de media. Los parciales de abajo están ajustados a cada km del perfil y suman exactamente el objetivo.</li>` : ""}
+  </ul></details>`;
   return `<div class="prevision">
     <div class="kpis">
-      <div class="kpi"><b>${fmtHoras(p.total)}</b><span>tiempo previsto</span></div>
-      <div class="kpi"><b>${fmtRitmo(p.ritmoMedio)}</b><span>ritmo medio /km</span></div>
+      ${p.real ? `<div class="kpi"><b>${fmtHoras(p.total)}</b><span>previsión con su forma</span></div>` : ""}
+      ${p.obj ? `<div class="kpi obj"><b>${fmtHoras(p.obj)}</b><span>objetivo · ${fmtRitmo(p.ritmoObjMedio)} /km</span></div>` : ""}
       <div class="kpi"><b>${p.km.toFixed(2).replace(".", ",")}</b><span>km</span></div>
       <div class="kpi"><b>+${p.sube} m</b><span>desnivel</span></div>
     </div>
-    ${c.track ? svgPerfil(c.track.perfil, c.track.kms) : `<small>Sin track: previsión en llano. Sube el GPX del recorrido para afinarla con las cuestas.</small>`}
-    <p class="small">Calculado con ${esc(p.de)}: ${fmtRitmo(p.base)} /km en llano${c.estrategia === "negativa" ? ", estrategia de ritmo negativo (segunda mitad más rápida)" : ", ritmo por esfuerzo constante"}${p.duro ? `. El kilómetro más duro es el ${p.duro}.` : "."}</p>
-    <div class="wrap"><table class="kms"><tr><th>Km</th><th>Desnivel</th><th>Ritmo</th><th>Parcial</th><th>Paso</th></tr>
-    ${p.kms.map(k => `<tr class="${k.sube / k.len > 0.025 ? "sube" : k.baja / k.len > 0.025 ? "baja" : ""}"><td>${k.km}${k.len < 990 ? `<small> (${k.len} m)</small>` : ""}</td><td>${k.sube || k.baja ? `+${k.sube} / −${k.baja}` : "llano"}</td><td><b>${fmtRitmo(k.ritmo)}</b></td><td>${fmtHoras(k.tiempo)}</td><td>${fmtHoras(k.acum)}</td></tr>${k.nota ? `<tr class="nota-km"><td colspan="5">${esc(k.nota)}</td></tr>` : ""}`).join("")}
+    ${veredicto}${expl}
+    ${c.track ? svgPerfil(c.track.perfil, c.track.kms) : ""}
+    ${p.duro ? `<p class="small">El kilómetro más duro es el ${p.duro}.${c.estrategia === "negativa" ? " Estrategia: segunda mitad más rápida." : " Estrategia: esfuerzo constante."}</p>` : ""}
+    <div class="wrap"><table class="kms"><tr><th>Km</th><th>Desnivel</th>${p.real ? "<th>Previsión</th>" : ""}${p.obj ? "<th>Para el objetivo</th><th>Paso</th>" : "<th>Paso</th>"}</tr>
+    ${p.kms.map(k => `<tr class="${k.sube / k.len > 0.025 ? "sube" : k.baja / k.len > 0.025 ? "baja" : ""}"><td>${k.km}${k.len < 990 ? `<small> (${k.len} m)</small>` : ""}</td><td>${k.sube || k.baja ? `+${k.sube} / −${k.baja}` : "llano"}</td>${p.real ? `<td>${fmtRitmo(k.ritmo)}</td>` : ""}${p.obj ? `<td><b>${fmtRitmo(k.ritmoObj)}</b></td><td>${fmtHoras(k.acumObj)}</td>` : `<td>${fmtHoras(k.acum)}</td>`}</tr>${k.nota ? `<tr class="nota-km"><td colspan="5">${esc(k.nota)}</td></tr>` : ""}`).join("")}
     </table></div></div>`;
 }
 

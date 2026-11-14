@@ -619,3 +619,38 @@ body.cinta .c-calle,body:not(.cinta) .c-cinta{display:none}
 .pp-rec{font-size:13.5px;background:var(--paper);border-radius:8px;padding:6px 8px}
 .pp-x{margin:2px 0 0;font-size:13px;color:var(--ink2)}
 @media print{.det-ses{display:none}}
+
+/* v13 · Previsión con objetivo */
+.prevision .kpi.obj b{color:var(--accent)}
+.veredicto{border-radius:10px;padding:8px 12px;margin:8px 0;font-size:14px}
+.veredicto.ok{background:#0F2A1A;color:#B9F5CF}.veredicto.ojo{background:#3A2C00;color:#FFE08A}.veredicto.mal{background:#3A0F18;color:#FFC2CD}
+.expl{margin:6px 0 10px;font-size:13.5px}
+.expl summary{cursor:pointer;color:var(--accent);font-weight:700}
+.expl ul{margin:6px 0 0;padding-left:18px}.expl li{margin:3px 0}
+
+/* v13 · Resumen 360, semana de carrera, resultado, bienestar extra */
+.r-sec{margin:14px 0 6px;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3)}
+.r-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.r-kpi{background:var(--paper);border-radius:12px;padding:9px 11px;border-left:3px solid var(--line)}
+.r-kpi b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.r-kpi span{font-size:12px;color:var(--ink2)}
+.r-kpi.ok{border-left-color:var(--baja)}.r-kpi.ojo{border-left-color:var(--media)}.r-kpi.mal{border-left-color:var(--crit)}
+.r-kpi .tend{width:100%;height:30px;margin-top:4px}.r-kpi .tend polyline{fill:none;stroke:var(--accent);stroke-width:2}
+.r-acc{margin-top:12px;flex-wrap:wrap}
+.ia-res{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:10px 12px;margin:8px 0;font-size:14px;line-height:1.5}
+.visto-ent{font-size:12.5px;color:var(--baja);margin:4px 0}
+.bien-extra{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.bien-extra label{font-size:13px}
+.semana-car{border-color:var(--carrera)!important}
+.check{list-style:none;padding:0;margin:8px 0}
+.check li{padding:4px 0;border-bottom:1px solid var(--line)}
+.check label{display:flex;gap:10px;align-items:center;font-size:14px}
+.check input{width:auto;margin:0;display:inline-block;accent-color:var(--accent);transform:scale(1.2)}
+.check input:checked+*{text-decoration:line-through}
+.res-f{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.resultado label,.resultado .btn{display:block;margin-top:8px}
+.resultado .btn{width:100%}
+.resumen-l .rl-kpis{display:flex;gap:8px;margin:6px 0}
+.resumen-l .rl-kpis div{flex:1;background:var(--paper);border-radius:10px;padding:8px;text-align:center}
+.resumen-l .rl-kpis b{display:block;font-size:20px}.resumen-l .rl-kpis span{font-size:12px;color:var(--ink2)}
+.check-d{margin-top:6px}.check-d summary{cursor:pointer;font-weight:700;color:var(--accent);font-size:14px}

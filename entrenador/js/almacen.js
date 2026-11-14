@@ -4,7 +4,7 @@
      entrenadores/{uid}/deportistas/{id}/semanas/{lunes}   plan de cada semana
      entrenadores/{uid}/deportistas/{id}/archivos/{fid}    PDF e informes (hasta ~700 KB)
      publico/{token}                                 lo que ve el deportista con su enlace */
-import { firebaseConfig } from "./firebase-config.js?v=202611141919";
+import { firebaseConfig } from "./firebase-config.js?v=202611141958";
 
 const V = "10.12.2";
 const SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}.js`;
@@ -129,19 +129,32 @@ export async function borrarArchivo(a, id) {
 /* Buzón del deportista: lo que él registra con su enlace (entrenos hechos, valoraciones, carreras propuestas).
    Vive en publico/{token}/aportes y puede escribirlo quien tenga el enlace. */
 const sinAnidar = o => JSON.parse(JSON.stringify(o));
+// Tipos que aceptan las reglas antiguas. Los nuevos (bienestar, mensaje…) se guardan como "sesion" con su clase
+// si las reglas aún no los permiten, y al leerlos se les devuelve su tipo: así funcionan con cualquier versión de las reglas.
+const TIPOS_BASE = ["sesion", "semana", "carrera", "visita"];
+const normal = x => x.clase && x.tipo === "sesion" ? { ...x, tipo: x.clase } : x;
 export async function listarAportes(token) {
   if (!nube || !token) return [];
   await cargarFirebase();
   const q = await fb.getDocs(fb.collection(db, "publico", token, "aportes"));
-  return q.docs.map(d => ({ id: d.id, ...d.data() }));
+  return q.docs.map(d => normal({ id: d.id, ...d.data() }));
+}
+async function escribirAporte(token, id, datos) {
+  const r = fb.doc(db, "publico", token, "aportes", id);
+  try { await fb.setDoc(r, sinAnidar(datos), { merge: true }); }
+  catch (e) {
+    const t = datos.tipo || (await fb.getDoc(r).then(d => d.data()?.clase).catch(() => null));
+    if (e.code !== "permission-denied" || !t || TIPOS_BASE.includes(t)) throw e;
+    await fb.setDoc(r, sinAnidar({ ...datos, tipo: "sesion", clase: t }), { merge: true });
+  }
 }
 export async function guardarAporte(token, id, datos) {
   await cargarFirebase();
-  await fb.setDoc(fb.doc(db, "publico", token, "aportes", id), sinAnidar({ ...datos, cuando: new Date().toISOString() }), { merge: true });
+  await escribirAporte(token, id, { ...datos, cuando: new Date().toISOString() });
 }
 export async function marcarAporte(token, id, cambios) {
   await cargarFirebase();
-  await fb.setDoc(fb.doc(db, "publico", token, "aportes", id), sinAnidar(cambios), { merge: true });
+  await escribirAporte(token, id, cambios);
 }
 /* Fotos de los entrenos: cada una en su documento (publico/{token}/fotos/{id}) para que quepan muchas */
 export async function guardarFoto(token, id, img) {

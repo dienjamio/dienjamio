@@ -1,15 +1,15 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141919";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141919";
-import { leerArchivo, fusionar } from "./importar.js?v=202611141919";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141919";
-import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141919";
-import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611141919";
-import { htmlPrediccion } from "./prediccion.js?v=202611141919";
-import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611141919";
-import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611141919";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141919";
+import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611141958";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611141958";
+import { leerArchivo, fusionar } from "./importar.js?v=202611141958";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611141958";
+import { PRUEBAS, CARGA_TXT } from "./motor.js?v=202611141958";
+import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611141958";
+import { htmlPrediccion } from "./prediccion.js?v=202611141958";
+import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611141958";
+import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611141958";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611141958";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -35,7 +35,10 @@ async function init() {
   $("#barra").hidden = false;
   $("#barra").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) { v = b.dataset.v; pintar(); } });
   $("#main").addEventListener("click", clic);
-  $("#main").addEventListener("change", e => { if (e.target.id === "bien-dolor") $("#bien-dolor-txt").hidden = !e.target.checked; });
+  $("#main").addEventListener("change", e => {
+    if (e.target.id === "bien-dolor") $("#bien-dolor-txt").hidden = !e.target.checked;
+    if (e.target.dataset.chk) { const k = "chk-" + e.target.dataset.car; let o = {}; try { o = JSON.parse(localStorage.getItem(k) || "{}"); } catch (er) { } o[e.target.dataset.chk] = e.target.checked; try { localStorage.setItem(k, JSON.stringify(o)); } catch (er) { } }
+  });
   enlazarDialogos();
   pintar();
   botonChat();
@@ -81,7 +84,7 @@ async function marcarLeidos() {
 async function enviarChat() {
   const t = $("#chat-txt").value.trim(); if (!t) return;
   const id = idMensaje(), m = { tipo: "mensaje", de: "deportista", texto: t, t: new Date().toISOString(), visto: false, ...(chatRef ? { ref: chatRef } : {}) };
-  try { await guardarAporte(token, id, m); } catch (e) { return toast("No se ha podido enviar: " + (e.code || e.message)); }
+  try { await guardarAporte(token, id, m); } catch (e) { return toast(errTxt(e, "enviar")); }
   aportes.push({ ...m, id }); chatRef = "";
   $("#chat-txt").value = ""; pintarChat(); toast("Enviado a tu entrenador");
 }
@@ -123,9 +126,11 @@ function pintar() {
     if (!sh) html += `<div class="panel vacio"><p>Tu entrenador todavía no ha preparado esta semana.</p></div>`;
     else {
       const i = diaSemana(h), d = sh.dias[i], regs = regsDe(l0);
+      html += htmlResultado(h);
       html += htmlBien(h);
       html += htmlDorsal(d, h, prox);
       if (d.ses.some(x => ["run", "bike"].includes(x.dep))) html += `<div id="tiempo-hoy">${geoGuardada() ? `<p class="small muted">Cargando el tiempo…</p>` : `<button class="btn sec mini" data-acc="ver-tiempo">📍 Ver el tiempo y la mejor hora para entrenar</button>`}</div>`;
+      html += "<!--extra-->";
       html += `<article class="dia hoy"><div class="dia-cab"><h3>Entreno</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
         ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true, abierto: s.dep !== "movilidad" })).join("") + actividades().filter(a => a.fecha === h).map(a => `<div class="reloj"><button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button></div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
       // entrenos de días anteriores sin registrar
@@ -136,6 +141,7 @@ function pintar() {
       const man = sh.dias[(i + 1) % 7];
       if (i < 6) html += `<div class="manana"><b>Mañana:</b> ${man.ses.length ? man.ses.map(s => esc(s.t)).join(" + ") : "descanso"}</div>`;
     }
+    if (sh) html = html.replace("<!--extra-->", htmlSemanaCarrera(h, prox) + htmlResumenLunes(h));
     m.innerHTML = html;
     if (geoGuardada() && $("#tiempo-hoy")) cargarTiempo();
   } else if (v === "semana") {
@@ -236,11 +242,13 @@ function htmlBien(h) {
   const b = bienDe(h);
   if (b && !bienTmp) {
     const p = puntuarBien(b), n = nivelBien(p);
-    return `<div class="bien-ok ${n}"><span>${n === "ok" ? "✅" : n === "ojo" ? "🟡" : "🔴"} Hoy te has levantado: <b>${p}/100</b>${b.dolor ? ` · dolor${b.dolorTxt ? ": " + esc(b.dolorTxt) : ""}` : ""}</span><button class="link" data-acc="bien-editar">Cambiar</button></div>`;
+    return `<div class="bien-ok ${n}"><span>${n === "ok" ? "✅" : n === "ojo" ? "🟡" : "🔴"} Hoy te has levantado: <b>${p}/100</b>${b.dolor ? ` · dolor${b.dolorTxt ? ": " + esc(b.dolorTxt) : ""}` : ""}${b.fcRep ? ` · ❤️ ${b.fcRep}` : ""}${b.peso ? ` · ⚖️ ${b.peso} kg` : ""}${b.visto ? `<br><small>👀 ${esc(nomEnt())} lo ha visto</small>` : ""}</span><button class="link" data-acc="bien-editar">Cambiar</button></div>`;
   }
   const t = bienTmp || {};
   return `<article class="dia bien"><div class="dia-cab"><h3>☀️ ¿Cómo te has levantado?</h3><span class="small muted">10 segundos</span></div>
     ${BIEN_PREG.map(([k, n, ico]) => `<div class="bien-f"><b>${n}</b><div class="bien-o">${ico.map((e, i) => `<button type="button" data-acc="bien" data-k="${k}" data-v="${i + 1}" aria-label="${n} ${i + 1} de 5" ${+t[k] === i + 1 ? 'aria-pressed="true"' : ""}>${e}</button>`).join("")}</div></div>`).join("")}
+    <div class="bien-extra"><label>❤️ Pulso en reposo <small>(opcional, al despertar)</small><input id="bien-fc" inputmode="numeric" placeholder="ppm" value="${esc(t.fcRep || "")}"></label>
+      <label>⚖️ Peso <small>(opcional)</small><input id="bien-peso" inputmode="decimal" placeholder="kg" value="${esc(t.peso || "")}"></label></div>
     <label class="bien-dolor"><input type="checkbox" id="bien-dolor" ${t.dolor ? "checked" : ""}> Tengo algún dolor</label>
     <input id="bien-dolor-txt" placeholder="¿Dónde? (rodilla, gemelo…)" value="${esc(t.dolorTxt || "")}" ${t.dolor ? "" : "hidden"}>
     <button class="btn pri" data-acc="bien-guardar">Guardar</button></article>`;
@@ -252,6 +260,62 @@ function consejoBien(h, s) {
   if (p < 45) return `<div class="dor-aviso mal">🔴 Hoy vienes justo: ${["calidad", "test", "largo"].includes(s.tipo) ? "cambia la sesión por un rodaje suave y recorta un 30 %" : "hazlo muy suave y recorta un 30 %"}. Mejor un entreno menos que una lesión.</div>`;
   if (p < 70) return `<div class="dor-aviso ojo">🟡 Escucha al cuerpo: si en el calentamiento no te encuentras mejor, hazlo todo suave.</div>`;
   return "";
+}
+
+const errTxt = (e, que) => e.code === "unavailable" || /network|fetch/i.test(e.message || "") ? `Sin conexión: no se ha podido ${que}. Prueba de nuevo en un momento.`
+  : e.code === "permission-denied" ? `No se ha podido ${que} (permisos). Avisa a tu entrenador.` : `No se ha podido ${que}: ${e.code || e.message}`;
+const nomEnt = () => P.entrenador ? P.entrenador.split(" ")[0] : "Tu entrenador";
+
+/* ---------------- Resumen de la semana pasada (lunes y martes) ---------------- */
+function htmlResumenLunes(h) {
+  const dia = diaSemana(h);
+  if (dia > 1) return "";
+  const l = sumaDias(lunesDe(h), -7), clave = "resumen-" + l;
+  try { if (localStorage.getItem(clave)) return ""; } catch (e) { }
+  const prog = mezclarProgreso(P.progreso || [], calcProgreso({ semanas: P.semanas, aportes })).find(x => x.lunes === l);
+  if (!prog || (!prog.sesPlan && !prog.sesHechas)) return "";
+  const sh = P.semanas[lunesDe(h)], ses = sh ? sh.dias.flatMap(d => d.ses).filter(x => x.dep !== "movilidad") : [];
+  const claveS = ses.filter(x => ["calidad", "largo", "test", "competicion"].includes(x.tipo)).map(x => x.t);
+  const pct = prog.sesPlan ? prog.sesHechas / prog.sesPlan : 1;
+  const frase = pct >= 0.9 ? "¡Semana redonda! Así se construye la forma 💪" : pct >= 0.6 ? "Buena semana: lo importante es la constancia." : "Semana complicada, pasa: esta la sacamos adelante juntos.";
+  return `<article class="dia resumen-l"><div class="dia-cab"><h3>📊 Tu semana pasada</h3><button class="link" data-acc="cerrar-resumen" data-k="${clave}">Cerrar</button></div>
+    <div class="rl-kpis"><div><b>${prog.sesHechas}/${prog.sesPlan || prog.sesHechas}</b><span>entrenos</span></div><div><b>${Math.round(prog.hechoMin / 6) / 10} h</b><span>de entreno</span></div>${prog.km ? `<div><b>${String(prog.km).replace(".", ",")}</b><span>km</span></div>` : ""}</div>
+    <p>${frase}</p>
+    ${sh ? `<p class="small">Esta semana: <b>${esc(sh.fase?.n || "")}</b> · ${Math.round(sh.total / 6) / 10} h${claveS.length ? ` · claves: ${claveS.map(esc).join(", ")}` : ""}</p>` : ""}
+  </article>`;
+}
+
+/* ---------------- Semana de carrera ---------------- */
+const CHECK = [["dorsal", "Dorsal y chip recogidos (o sé dónde y cuándo)"], ["ropa", "Ropa y zapatillas probadas en entrenos (nada nuevo)"], ["imperd", "Imperdibles, reloj cargado, auriculares si se permiten"],
+  ["cena", "Cena rica en hidratos y conocida la noche antes"], ["desayuno", "Desayuno 2,5-3 h antes: lo de siempre"], ["hora", "Sé la hora de salida, cómo llegar y dónde aparcar"],
+  ["calent", "Calentamiento: 10-15' suave + 3 progresivos"], ["plan", "Me sé mis parciales (pestaña Carreras)"], ["dormir", "Dormir bien las dos noches antes"]];
+function htmlSemanaCarrera(h, prox) {
+  if (!prox || prox.prioridad === "C") return "";
+  const d = diasEntre(h, prox.fecha);
+  if (d < 0 || d > 7) return "";
+  let ok = {}; try { ok = JSON.parse(localStorage.getItem("chk-" + prox.id) || "{}"); } catch (e) { }
+  const p = prox.prev, hechos = CHECK.filter(([k]) => ok[k]).length;
+  return `<article class="dia semana-car"><div class="dia-cab"><h3>🏁 ${d === 0 ? "¡Hoy es el día!" : `Semana de carrera · faltan ${d} día${d === 1 ? "" : "s"}`}</h3><span class="small muted">${hechos}/${CHECK.length}</span></div>
+    <p><b>${esc(prox.nombre || PRUEBAS[prox.prueba])}</b>${p && !p.falta ? ` · ${p.obj ? `objetivo <b>${fmtT(p.obj)}</b> (${Math.floor(p.ritmoObjMedio / 60)}:${String(Math.round(p.ritmoObjMedio % 60)).padStart(2, "0")} /km)` : `previsión <b>${fmtT(p.total)}</b>`}` : ""}</p>
+    ${p?.kms?.length && (p.obj || p.real) ? `<p class="small">Primer km a <b>${fmtR(p.obj ? p.kms[0].ritmoObj : p.kms[0].ritmo)}</b>, controlado. Mitad (km ${Math.ceil(p.kms.length / 2)}) en <b>${fmtT(p.obj ? p.kms[Math.ceil(p.kms.length / 2) - 1].acumObj : p.kms[Math.ceil(p.kms.length / 2) - 1].acum)}</b>. <button class="link" data-acc="ir-carreras">Ver todos los parciales</button></p>` : ""}
+    <details class="check-d"${d <= 1 ? " open" : ""}><summary>✅ Checklist de carrera (${hechos}/${CHECK.length})</summary><ul class="check">${CHECK.map(([k, t]) => `<li><label><input type="checkbox" data-chk="${k}" data-car="${prox.id}" ${ok[k] ? "checked" : ""}> ${t}</label></li>`).join("")}</ul></details>
+    ${d <= 2 ? `<p class="small">💧 Bebe bien estos días y sube un poco los hidratos (pasta, arroz, pan). Nada de experimentos.</p>` : `<p class="small">Esta semana baja el volumen y se mantiene algo de ritmo: es normal sentirse «raro». Confía.</p>`}
+  </article>`;
+}
+const fmtR = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+
+/* ---------------- ¿Cómo fue la carrera? ---------------- */
+function htmlResultado(h) {
+  const cs = (P.carreras || []).filter(c => c.fecha <= h && diasEntre(c.fecha, h) <= 5);
+  return cs.map(c => {
+    const r = aportes.find(x => x.id === "res-" + c.id);
+    if (r) return diasEntre(c.fecha, h) <= 2 ? `<div class="bien-ok ok"><span>🏅 ${esc(c.nombre)}: <b>${esc(r.tiempo || "—")}</b>${r.puesto ? ` · puesto ${esc(r.puesto)}` : ""}${r.visto ? `<br><small>👀 ${esc(nomEnt())} lo ha visto</small>` : ""}</span></div>` : "";
+    return `<article class="dia resultado"><div class="dia-cab"><h3>🏁 ¿Cómo fue la ${esc(c.nombre)}?</h3></div>
+      <div class="res-f"><label>Tiempo oficial<input id="res-t-${c.id}" placeholder="48:21" inputmode="numeric"></label><label>Puesto <small>(opcional)</small><input id="res-p-${c.id}" placeholder="125"></label></div>
+      <label>Sensaciones<select id="res-s-${c.id}"><option value="genial">🤩 Genial</option><option value="bien" selected>💪 Bien</option><option value="regular">😐 Regular</option><option value="mal">😣 Mal</option></select></label>
+      <label>Cuéntale cómo fue <small>(opcional)</small><textarea id="res-x-${c.id}" rows="2" placeholder="Salida, cuestas, cómo acabaste…"></textarea></label>
+      <button class="btn pri" data-acc="guardar-res" data-id="${c.id}">Guardar resultado</button></article>`;
+  }).join("");
 }
 
 /* ---------------- Tiempo ---------------- */
@@ -329,19 +393,31 @@ async function clic(e) {
     return;
   }
   if (acc === "chat") return abrirChat();
+  if (acc === "cerrar-resumen") { try { localStorage.setItem(b.dataset.k, "1"); } catch (er) { } return pintar(); }
+  if (acc === "guardar-res") {
+    const id = b.dataset.id, c = (P.carreras || []).find(x => x.id === id); if (!c) return;
+    const t = $(`#res-t-${id}`).value.trim();
+    if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(t)) return toast("Escribe el tiempo así: 48:21 o 1:45:30");
+    const obj = c.prev?.obj, seg = t.split(":").map(Number).reduce((x, y) => x * 60 + y, 0);
+    return guardar("res-" + id, { tipo: "resultado", carreraId: id, nombre: c.nombre, prueba: c.prueba, fecha: c.fecha, tiempo: t, puesto: $(`#res-p-${id}`).value.trim(), sens: $(`#res-s-${id}`).value, texto: $(`#res-x-${id}`).value.trim(), visto: false },
+      obj && seg <= obj ? "🎉 ¡Objetivo conseguido! Enhorabuena" : "🏅 Resultado guardado. ¡Enhorabuena por terminarla!");
+  }
   if (acc === "chat-ses") { const r = buscarSesion(b.dataset.id); return abrirChat(r ? `${r.s.t} (${DIAS[r.i]} ${fechaCorta(sumaDias(r.l, r.i))})` : ""); }
   if (acc === "chat-cerrar") return dlgChat().close();
   if (acc === "chat-sin-ref") { chatRef = ""; return pintarChat(); }
   if (acc === "chat-enviar") return enviarChat();
   if (acc === "bien") {
-    bienTmp = { ...(bienTmp || bienDe(hoy()) || {}), [b.dataset.k]: +b.dataset.v, dolor: $("#bien-dolor")?.checked || false, dolorTxt: $("#bien-dolor-txt")?.value || "" };
+    bienTmp = { ...(bienTmp || bienDe(hoy()) || {}), [b.dataset.k]: +b.dataset.v, dolor: $("#bien-dolor")?.checked || false, dolorTxt: $("#bien-dolor-txt")?.value || "", fcRep: $("#bien-fc")?.value || "", peso: $("#bien-peso")?.value || "" };
     return pintar();
   }
   if (acc === "bien-editar") { bienTmp = { ...bienDe(hoy()) }; return pintar(); }
   if (acc === "bien-guardar") {
     const t = { ...(bienTmp || {}), dolor: $("#bien-dolor").checked, dolorTxt: $("#bien-dolor").checked ? $("#bien-dolor-txt").value.trim() : "" };
+    const fc = parseInt($("#bien-fc").value, 10), peso = parseFloat($("#bien-peso").value.replace(",", "."));
+    if ($("#bien-fc").value && !(fc >= 30 && fc <= 110)) return toast("El pulso en reposo suele estar entre 35 y 90 ppm: revísalo.");
+    if ($("#bien-peso").value && !(peso >= 30 && peso <= 200)) return toast("Revisa el peso.");
     if (BIEN_PREG.some(([k]) => !t[k])) return toast("Marca las cuatro: sueño, energía, piernas y ánimo.");
-    const h = hoy(), d = { tipo: "bienestar", fecha: h, sueno: t.sueno, energia: t.energia, piernas: t.piernas, animo: t.animo, dolor: t.dolor, dolorTxt: t.dolorTxt, puntos: puntuarBien(t), visto: false };
+    const h = hoy(), d = { tipo: "bienestar", fecha: h, sueno: t.sueno, energia: t.energia, piernas: t.piernas, animo: t.animo, dolor: t.dolor, dolorTxt: t.dolorTxt, puntos: puntuarBien(t), visto: false, ...(fc ? { fcRep: fc } : {}), ...(peso ? { peso: Math.round(peso * 10) / 10 } : {}) };
     bienTmp = null;
     return guardar(`bien-${h}`, d, puntuarBien(t) >= 70 ? "💪 ¡A por el día!" : "Anotado: tu entrenador lo verá");
   }
@@ -382,7 +458,7 @@ async function guardar(id, datos, ok) {
     if (i >= 0) aportes[i] = nuevo; else aportes.push(nuevo);
     const nueva = logros().M.find(m => m[0] && !antes.includes(m[2]));
     toast(nueva ? `${nueva[1]} ¡Medalla nueva: ${nueva[2]}!` : ok); pintar();
-  } catch (e) { toast("No se ha podido guardar: " + (e.code || e.message)); }
+  } catch (e) { toast(errTxt(e, "guardar")); }
 }
 
 function pintarFotos() {

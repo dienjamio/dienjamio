@@ -17,3 +17,14 @@
   con botón para actualizar los ritmos del plan a su forma actual.
 - **Informe mensual en PDF** (Progreso → 📄 Informe del mes), con valoración del entrenador (opcionalmente redactada con Claude).
 - Reglas: el tipo `mensaje` también tiene que estar permitido en `aportes`.
+
+## Previsión de carrera (v2), resumen 360 y más cuidado al deportista
+
+- **Previsión realista** con su forma actual (predicción de entrenos + marcas), separada del **objetivo**:
+  parciales km a km ajustados al perfil que suman exactamente el objetivo, veredicto y explicación de cada segundo.
+  El desnivel de los GPX se calcula sin el ruido del GPS (suavizado ±100 m + histéresis de 3 m); los tracks antiguos se recalculan solos.
+- **📊 Resumen** del deportista: cumplimiento, km y horas, RPE, forma/fatiga/ratio, bienestar, pulso en reposo, peso,
+  zapatillas, predicción y próxima carrera, con análisis completo opcional con Claude.
+- Deportista: semana de carrera con checklist, «¿Cómo fue la carrera?» (actualiza sus marcas si es mejor),
+  resumen de su semana los lunes, pulso en reposo y peso opcionales y «👀 Tu entrenador lo ha visto».
+- Los aportes con tipos nuevos funcionan aunque las reglas sean antiguas (se guardan como `sesion` + `clase`).

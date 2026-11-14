@@ -1,17 +1,17 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141919";
-import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141919";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141919";
-import { BIBLIO } from "./biblioteca.js?v=202611141919";
-import { leerTrack, prevision } from "./carrera.js?v=202611141919";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141919";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611141919";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611141919";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611141919";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611141919";
-import { calcProgreso } from "./progreso.js?v=202611141919";
-import * as A from "./almacen.js?v=202611141919";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141919";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611141958";
+import { generarSemana, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611141958";
+import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611141958";
+import { BIBLIO } from "./biblioteca.js?v=202611141958";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611141958";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611141958";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611141958";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611141958";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611141958";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611141958";
+import { calcProgreso } from "./progreso.js?v=202611141958";
+import * as A from "./almacen.js?v=202611141958";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611141958";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -242,6 +242,8 @@ function alertas(a) {
   else if (C && C.historial >= 21 && C.tsb < -30) out.push({ t: `🪫 Muy fatigado (frescura ${C.tsb})`, g: true });
   const b = bienestares(a)[0];
   if (b && b.fecha >= sumaDias(h, -1)) { const pb = puntuarBien(b); if (b.dolor) out.push({ t: `🤕 Hoy con dolor${b.dolorTxt ? ": " + b.dolorTxt.slice(0, 30) : ""}`, g: true }); else if (pb < 45) out.push({ t: `🔴 Se ha levantado mal (${pb}/100)`, g: true }); }
+  const fcs = bienestares(a).filter(x => +x.fcRep && x.fecha >= sumaDias(h, -28));
+  if (fcs.length >= 5 && fcs[0].fecha >= sumaDias(h, -1)) { const base = fcs.slice(1).map(x => +x.fcRep).sort((x, y) => x - y)[Math.floor((fcs.length - 1) / 2)]; if (+fcs[0].fcRep >= base + 7) out.push({ t: `❤️ Pulso en reposo alto: ${fcs[0].fcRep} (suele ${base}). Posible fatiga o algo de catarro`, g: true }); }
   const bajos = bienestares(a).filter(x => x.fecha >= sumaDias(h, -6) && puntuarBien(x) < 50).length;
   if (bajos >= 3) out.push({ t: `😴 ${bajos} días malos esta semana: revisa la carga`, g: true });
   for (const z of zapatillas(a).filter(z => !z.hasta)) { const km = kmZapa(a, z); if (km >= 750) out.push({ t: `👟 ${z.nombre}: ${km} km`, g: false }); }
@@ -250,7 +252,7 @@ function alertas(a) {
 const htmlAlertas = a => { const al = alertas(a); return al.length ? `<div class="alertas">${al.map(x => `<span class="alerta-c${x.g ? " grave" : ""}">${esc(x.t)}</span>`).join("")}</div>` : ""; };
 function resumenNuevos(a) {
   const n = nuevos(a), c = t => n.filter(x => x.tipo === t).length;
-  return [c("mensaje") && `💬 ${c("mensaje")} mensaje${c("mensaje") > 1 ? "s" : ""}`, c("bienestar") && `${c("bienestar")} día${c("bienestar") > 1 ? "s" : ""} de bienestar`, c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
+  return [c("resultado") && `🏅 ${c("resultado")} resultado${c("resultado") > 1 ? "s" : ""}`, c("mensaje") && `💬 ${c("mensaje")} mensaje${c("mensaje") > 1 ? "s" : ""}`, c("bienestar") && `${c("bienestar")} día${c("bienestar") > 1 ? "s" : ""} de bienestar`, c("sesion") && `${c("sesion")} entreno${c("sesion") > 1 ? "s" : ""} registrado${c("sesion") > 1 ? "s" : ""}`, c("semana") && "valoración de la semana", c("carrera") && `${c("carrera")} carrera${c("carrera") > 1 ? "s" : ""} propuesta${c("carrera") > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
 }
 
 /* =========================================================
@@ -420,10 +422,11 @@ async function publicar(a) {
     await A.publicar(a, {
       nombre: a.nombre, objetivo: OBJ[a.objetivo], mensaje: a.mensaje || "",
       carreras: (a.carreras || []).filter(c => c.fecha >= sumaDias(hoy(), -30)).map(c => ({ id: c.id, nombre: c.nombre, fecha: c.fecha, prueba: c.prueba, prioridad: c.prioridad, objetivo: c.objetivo || "", lugar: c.lugar || "", estrategia: c.estrategia || "", ritmoObjetivo: c.ritmoObjetivo || "",
-        track: c.track ? { dist: c.track.dist, sube: c.track.sube, baja: c.track.baja, kms: c.track.kms, perfil: c.track.perfil } : null, prev: prevision(c, Z) })),
+        track: c.track ? { dist: c.track.dist, sube: c.track.sube, baja: c.track.baja, kms: c.track.kms, perfil: c.track.perfil } : null, prev: prevision(c, Z, predDe(a)) })),
       progreso,
       marcas: a.marcas || {},
       pred: predDe(a),
+      entrenador: ajustes.presentacion?.nombre || "",
       kmAno: Math.round((a.actividades || []).filter(x => x.dep === "run" && x.fecha >= hoy().slice(0, 4) + "-01-01").reduce((t, x) => t + (+x.km || 0), 0)),
       carrerasHechas: (a.carreras || []).filter(c => c.fecha < hoy()).length,
       videos: ajustes.videos || {},
@@ -452,7 +455,9 @@ async function abrir(id, mantener = false) {
   if (actual?.id !== id || !actual.semanas) { a.semanas = await A.cargarSemanas(a); archivos = []; }
   if (A.nube) { try { a._aportes = await A.listarAportes(a.token); } catch (e) { a._aportes = a._aportes || []; } }
   actual = a;
-  if (!mantener) { sub = "semana"; lunesVista = lunesDe(hoy()); }
+  (a.carreras || []).forEach(c => { if (c.track && c.track.v !== 2) c.track = normalizarTrack(c.track); }); // desnivel sin ruido del GPS
+  if (!mantener) { sub = (a._aportes || []).some(x => x.tipo !== "visita") || (a.actividades || []).length ? "resumen" : "semana"; lunesVista = lunesDe(hoy()); } // recién creado: su semana
+  await procesarResultados(a);
   // las actividades que el deportista sube al registrar entrenos pasan a su historial
   const suyas = (a._aportes || []).filter(x => x.tipo === "sesion" && x.act?.fecha).map(x => ({ ...x.act, id: "dep-" + x.id }));
   if (suyas.length) { const { lista, anadidas } = fusionar(a.actividades || [], suyas); if (anadidas) { a.actividades = lista.slice(0, 1500); await A.guardarFicha(a); } }
@@ -531,7 +536,83 @@ function pintarAtleta() {
     + (htmlActividades((a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep)), "Sus actividades (12 semanas)") || `<p class="muted small">Sin actividades: súbelas en «Datos» o pídele que suba el archivo de su reloj al registrar cada entreno.</p>`);
   else if (sub === "datos") pintarDatos();
   else if (sub === "chat") pintarChat();
+  else if (sub === "resumen") el.innerHTML = htmlResumen(a);
   else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>${htmlFuentes(a)}`;
+}
+
+/* ---------------- Resultados de carrera: actualizan sus marcas ---------------- */
+async function procesarResultados(a) {
+  let cambia = false;
+  for (const r of (a._aportes || []).filter(x => x.tipo === "resultado" && x.tiempo)) {
+    const c = (a.carreras || []).find(x => x.id === r.carreraId);
+    if (c && c.resultado !== r.tiempo) { c.resultado = r.tiempo; c.puesto = r.puesto || ""; cambia = true; }
+    const k = r.prueba, seg = parseTiempo(r.tiempo);
+    if (!["5k", "10k", "media", "maraton"].includes(k) || !seg) continue;
+    const ant = parseTiempo(a.marcas?.[k]);
+    if (!ant || seg < ant) {
+      a.marcas = { ...(a.marcas || {}), [k]: r.tiempo };
+      if (k !== "10k" && a.marcas["10k"] && parseTiempo(a.marcas["10k"]) > seg * Math.pow(10 / { "5k": 5, media: 21.0975, maraton: 42.195 }[k], 1.06) * 1.03) delete a.marcas["10k"]; // la marca nueva manda
+      cambia = true; toast(`🏅 Nueva marca de ${PRUEBAS[k]}: ${r.tiempo}. Ritmos recalculados.`);
+    }
+  }
+  if (cambia) { await A.guardarFicha(a); await actualizarFuturas(a); await publicar(a); }
+}
+
+/* ---------------- Resumen 360 del deportista ---------------- */
+function lineaTendencia(vals, w = 260, h = 46) {
+  if (vals.length < 2) return "";
+  const ys = vals.map(v => v[1]), mn = Math.min(...ys), mx = Math.max(...ys), r = Math.max(1, mx - mn);
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1) * w).toFixed(1)},${(h - 4 - (v[1] - mn) / r * (h - 8)).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" class="tend"><polyline points="${pts}"/></svg>`;
+}
+function htmlResumen(a) {
+  const h = hoy(), Z = calcZonas(a), C = cargaDe(a), pr = predDe(a);
+  const prog = calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [], n: 5 }).slice(0, 4);
+  const plan = prog.reduce((t, x) => t + x.sesPlan, 0), hechas = prog.reduce((t, x) => t + x.sesHechas, 0);
+  const km4 = prog.reduce((t, x) => t + x.km, 0) / 4, h4 = prog.reduce((t, x) => t + x.hechoMin, 0) / 4 / 60;
+  const bs = bienestares(a), b7 = bs.filter(x => x.fecha >= sumaDias(h, -6));
+  const bMed = b7.length ? Math.round(b7.reduce((t, x) => t + (puntuarBien(x) || 0), 0) / b7.length) : null;
+  const fcs = bs.filter(x => +x.fcRep).slice(0, 28).reverse(), pesos = bs.filter(x => +x.peso).slice(0, 60).reverse();
+  const regs = (a._aportes || []).filter(x => x.tipo === "sesion" && x.lunes).sort((x, y) => (y.cuando || "").localeCompare(x.cuando || ""));
+  const rpes = regs.slice(0, 8).map(x => +x.rpe).filter(Boolean);
+  const ult = regs[0] ? sumaDias(regs[0].lunes, regs[0].dia || 0) : null;
+  const v = visitas(a);
+  const prox = (a.carreras || []).filter(c => c.fecha >= h).sort((x, y) => x.fecha.localeCompare(y.fecha))[0];
+  const pv = prox ? prevision(prox, Z, pr) : null;
+  const zs = zapatillas(a).filter(z => !z.hasta);
+  const k = (val, txt, cls = "") => `<div class="r-kpi ${cls}"><b>${val}</b><span>${txt}</span></div>`;
+  const sinLeer = sinLeerEnt(a._aportes).length;
+  return `${htmlAlertas(a) ? `<article class="dia"><div class="dia-cab"><h3>⚠️ Avisos</h3></div>${htmlAlertas(a)}</article>` : ""}
+    <article class="dia resumen360"><div class="dia-cab"><h3>📊 ${esc(a.nombre.split(" ")[0])} de un vistazo</h3>${claveClaude() ? `<button class="btn sec mini" data-acc="ia-todo">🤖 Análisis completo</button>` : ""}</div>
+    <div id="ia-todo-res"></div>
+    <h4 class="r-sec">Entrenamiento (últimas 4 semanas)</h4>
+    <div class="r-kpis">
+      ${k(plan ? Math.round(hechas / plan * 100) + " %" : "—", `cumplimiento (${hechas}/${plan})`, plan ? (hechas / plan >= 0.8 ? "ok" : hechas / plan >= 0.6 ? "ojo" : "mal") : "")}
+      ${k(Math.round(km4) + " km", "por semana corriendo")}
+      ${k(String(Math.round(h4 * 10) / 10).replace(".", ",") + " h", "por semana")}
+      ${k(rpes.length ? String(Math.round(rpes.reduce((t, x) => t + x, 0) / rpes.length * 10) / 10).replace(".", ",") : "—", "esfuerzo medio (RPE) últimos entrenos")}
+      ${k(ult ? (diasEntre(ult, h) === 0 ? "hoy" : `hace ${diasEntre(ult, h)} d`) : "—", "último entreno registrado", ult && diasEntre(ult, h) > 5 ? "ojo" : "")}
+      ${k(v ? hace(v.ultima) : "nunca", `última visita${v ? ` · ${v.n} en total` : ""}`)}
+    </div>
+    ${C ? `<h4 class="r-sec">Forma y carga</h4><div class="r-kpis">
+      ${k(C.ctl, `forma ${C.tendencia > 0 ? "▲" : C.tendencia < 0 ? "▼" : ""}${C.tendencia ? Math.abs(C.tendencia) : ""}`)}${k(C.atl, "fatiga")}${k((C.tsb > 0 ? "+" : "") + C.tsb, "frescura", C.tsb < -30 ? "mal" : C.tsb < -10 ? "ojo" : "ok")}
+      ${C.acwr ? k(String(C.acwr).replace(".", ","), "ratio de carga", C.acwr > 1.5 ? "mal" : C.acwr > 1.3 || C.acwr < 0.8 ? "ojo" : "ok") : ""}
+    </div>` : ""}
+    <h4 class="r-sec">Cómo está</h4><div class="r-kpis">
+      ${k(bMed != null ? bMed + "/100" : "—", `bienestar 7 días${b7.length ? ` (${b7.length} registros)` : ""}`, bMed == null ? "" : nivelBien(bMed))}
+      ${k(b7.filter(x => x.dolor).length || "0", "días con dolor (7 d)", b7.some(x => x.dolor) ? "mal" : "")}
+      ${fcs.length ? `<div class="r-kpi"><b>${fcs[fcs.length - 1].fcRep} ppm</b><span>pulso en reposo</span>${lineaTendencia(fcs.map(x => [x.fecha, +x.fcRep]))}</div>` : ""}
+      ${pesos.length ? `<div class="r-kpi"><b>${String(pesos[pesos.length - 1].peso).replace(".", ",")} kg</b><span>peso${pesos.length > 1 ? ` (${(pesos[pesos.length - 1].peso - pesos[0].peso >= 0 ? "+" : "") + String(Math.round((pesos[pesos.length - 1].peso - pesos[0].peso) * 10) / 10).replace(".", ",")} kg)` : ""}</span>${lineaTendencia(pesos.map(x => [x.fecha, +x.peso]))}</div>` : ""}
+      ${zs.map(z => { const km = kmZapa(a, z); return k(km + " km", "👟 " + esc(z.nombre), km >= 800 ? "mal" : km >= 600 ? "ojo" : ""); }).join("")}
+    </div>
+    <h4 class="r-sec">Rendimiento</h4><div class="r-kpis">
+      ${pr ? k(fmtHoras(pr.tiempos["10k"]), `10K con su forma actual · VDOT ${String(pr.vdot).replace(".", ",")}${pr.tend ? ` (${pr.tend > 0 ? "+" : ""}${String(pr.tend).replace(".", ",")})` : ""}`, pr.tend > 0.3 ? "ok" : pr.tend < -0.3 ? "mal" : "") : ""}
+      ${Z.carrera ? k(fmtHoras(Z.carrera["10k"].t), "10K de sus ritmos de entreno") : ""}
+      ${prox ? k(`${diasEntre(h, prox.fecha)} d`, `hasta ${esc(prox.nombre)}`) : ""}
+      ${pv && !pv.falta && pv.real ? k(fmtHoras(pv.total), `previsión ${esc(prox.nombre)}${pv.obj ? ` · objetivo ${fmtHoras(pv.obj)}` : ""}`, pv.obj ? (pv.total <= pv.obj ? "ok" : (pv.total - pv.obj) / pv.km <= 4 ? "ojo" : "mal") : "") : ""}
+    </div>
+    <div class="fila r-acc">${sinLeer ? `<button class="btn pri mini" data-sub="chat">💬 ${sinLeer} mensaje${sinLeer > 1 ? "s" : ""} sin leer</button>` : `<button class="btn sec mini" data-sub="chat">💬 Escribirle</button>`}<button class="btn sec mini" data-sub="semana">📅 Ver su semana</button><button class="btn sec mini" data-sub="progreso">📈 Progreso</button></div>
+    </article>`;
 }
 
 /* ---------------- Chat ---------------- */
@@ -764,6 +845,7 @@ function htmlNovedades(a) {
   const lin = n.sort((x, y) => (y.cuando || "").localeCompare(x.cuando || "")).slice(0, 6).map(x => {
     if (x.tipo === "sesion") return `<li>✅ Registró un entreno (${esc(x.dia != null ? DIAS[x.dia] : "")} ${x.lunes ? fechaCorta(sumaDias(x.lunes, x.dia || 0)) : ""})${x.texto ? `: “${esc(x.texto.slice(0, 80))}”` : ""}</li>`;
     if (x.tipo === "bienestar") { const pb = puntuarBien(x); return `<li>${nivelBien(pb) === "ok" ? "✅" : nivelBien(pb) === "ojo" ? "🟡" : "🔴"} Se levantó el ${fechaCorta(x.fecha)}: <b>${pb}/100</b>${x.dolor ? ` · 🤕 ${esc(x.dolorTxt || "dolor")}` : ""}</li>`; }
+    if (x.tipo === "resultado") return `<li>🏅 <b>Resultado ${esc(x.nombre || "")}:</b> ${esc(x.tiempo || "")}${x.puesto ? ` · puesto ${esc(x.puesto)}` : ""} · ${({ genial: "🤩 genial", bien: "💪 bien", regular: "😐 regular", mal: "😣 mal" })[x.sens] || ""}${x.texto ? `: “${esc(x.texto.slice(0, 80))}”` : ""}</li>`;
     if (x.tipo === "mensaje") return `<li>💬 <b>Mensaje</b>${x.ref ? ` sobre ${esc(x.ref)}` : ""}: “${esc((x.texto || "").slice(0, 90))}” → <button class="link" data-sub="chat">responder</button></li>`;
     if (x.tipo === "material") return `<li>👟 Ha actualizado sus zapatillas → míralas en «Progreso»</li>`;
     if (x.tipo === "semana") return `<li>📝 Valoró la semana del ${fechaCorta(x.lunes)}: <b>${SENS_TXT[x.sensacion] || "—"}</b>${x.molestias ? " · ⚠️ molestias" : ""}</li>`;
@@ -923,7 +1005,7 @@ function pintarCarreras() {
   const fut = cs.filter(c => c.fecha >= hoy()), pas = cs.filter(c => c.fecha < hoy()).reverse();
   const Z = calcZonas(actual);
   const props = (actual._aportes || []).filter(x => x.tipo === "carrera" && (!x.estado || x.estado === "pendiente"));
-  const ficha = c => { const p = prevision(c, Z); return htmlCarreraFicha(c, true, p) + (c.fecha >= hoy() ? `<details class="prev-det"><summary>Previsión kilómetro a kilómetro${c.track ? "" : " (sube el track para afinarla)"}</summary>${htmlPrevision(c, p)}</details>` : ""); };
+  const pr = predDe(actual); const ficha = c => { const p = prevision(c, Z, pr); return htmlCarreraFicha(c, true, p) + (c.fecha >= hoy() ? `<details class="prev-det"><summary>Previsión kilómetro a kilómetro${c.track ? "" : " (sube el track para afinarla)"}</summary>${htmlPrevision(c, p)}</details>` : ""); };
   $("#sub").innerHTML = `${props.length ? `<article class="dia propuestas"><div class="dia-cab"><h3>🔔 Carreras que propone</h3></div>
     ${props.map(x => `<div class="propuesta"><div><b>${esc(x.nombre)}</b><span class="small"> · ${fechaCorta(x.fecha)} · ${esc(PRUEBAS[x.prueba] || x.prueba || "")}${x.lugar ? " · " + esc(x.lugar) : ""}</span>${x.texto ? `<p class="small">“${esc(x.texto)}”</p>` : ""}${x.web ? `<a class="small" href="${esc(x.web)}" target="_blank" rel="noopener">Web de la carrera</a>` : ""}</div>
       <div class="fila"><select data-prio="${x.id}"><option value="A">A · Principal</option><option value="B">B · Importante</option><option value="C" selected>C · Preparación</option></select>
@@ -1265,6 +1347,17 @@ function enlazar() {
     if (acc === "chat-enviar") return enviarMensaje(a);
     if (acc === "chat-recargar") { try { a._aportes = await A.listarAportes(a.token); } catch (e) { } return pintarChat(); }
     if (acc === "informe") return dialogoInforme(a);
+    if (acc === "ia-todo") {
+      const el = $("#ia-todo-res"); t.disabled = true; el.innerHTML = `<p class="small muted">🤖 Analizando todos sus datos…</p>`;
+      try {
+        const tmp = document.createElement("div"); tmp.innerHTML = htmlResumen(a) + htmlCarga(cargaDe(a)) + htmlBienTrainer(a);
+        const ses = Object.values(a.semanas || {}).filter(s => s.lunes >= sumaDias(lunesDe(hoy()), -21) && s.lunes <= lunesDe(hoy())).flatMap(s => s.dias.flatMap((d, i) => d.ses.map(x => { const r = (a._aportes || []).find(y => y.sesId === x.id); return `${sumaDias(s.lunes, i)} ${x.t} ${x.min}' → ${r ? `${r.hecho}${r.rpe ? " RPE " + r.rpe : ""}${r.texto ? " «" + r.texto + "»" : ""}` : "sin registrar"}`; })));
+        const txt = await analizar("Eres su entrenador. Analiza al deportista con TODOS estos datos y dame: 1) Estado actual en 2 frases. 2) Lo que va bien. 3) Riesgos o señales de alarma. 4) Ajustes concretos para las próximas 2 semanas (volumen, intensidad, descanso). 5) Un mensaje breve y cercano para mandarle. Sé concreto y usa sus números.",
+          `Deportista: ${a.nombre}, ${a.edad} años, objetivo ${OBJ[a.objetivo]}, nivel ${a.nivel}.\n${tmp.innerText}\n\nÚltimas 3 semanas, sesión a sesión:\n${ses.join("\n")}`);
+        el.innerHTML = `<div class="ia-res">${esc(txt).replace(/\n/g, "<br>")}</div>`;
+      } catch (e) { el.innerHTML = `<p class="alerta">⚠️ ${esc(e.message)}</p>`; }
+      t.disabled = false; return;
+    }
     if (acc === "crear-informe") return crearInforme(a);
     if (acc === "cerrar-dlg") return $("#dlg-gen").close();
     if (acc === "ia-informe") {
