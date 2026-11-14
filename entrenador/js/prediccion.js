@@ -3,8 +3,8 @@
    1) Carreras y tests registrados (tiempo + distancia reales).
    2) Ritmo frente a pulso en rodajes continuos: a qué % de la reserva cardiaca va cada ritmo → VO2máx (VDOT).
    3) Mejores tramos de 5 km o más dentro de los entrenos (cota mínima: casi nunca son a tope). */
-import { vdotDe, tiempoVdot } from "./motor.js?v=202611141958";
-import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611141958";
+import { vdotDe, tiempoVdot } from "./motor.js?v=202611142001";
+import { hoy, sumaDias, fmtHoras, fmtRitmo, esc, diasEntre } from "./util.js?v=202611142001";
 
 const D = { "5k": 5000, "10k": 10000, media: 21097.5, maraton: 42195 };
 const NOM = { "5k": "5 km", "10k": "10 km", media: "Media maratón", maraton: "Maratón" };
@@ -13,43 +13,51 @@ const segs = t => { const p = String(t || "").trim().split(":").map(Number); if 
 const num = x => parseFloat(String(x ?? "").replace(",", ".")) || 0;
 const mediana = xs => { const s = xs.slice().sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : null; };
 
-function vdotVentana({ actividades = [], aportes = [], semanas = {}, Z = {} }, fin, dias = 56) {
-  const ini = sumaDias(fin, -dias);
-  const enV = f => f && f > ini && f <= fin;
-  // 1) carreras y tests
+function vdotVentana({ actividades = [], aportes = [], semanas = {}, Z = {} }, fin) {
+  const enV = (f, dias) => f && f > sumaDias(fin, -dias) && f <= fin;
+  // 1) carreras y tests de las últimas 12 semanas (lo más fiable)
   const reales = [];
   for (const r of aportes) {
-    if (r.tipo !== "sesion" || r.hecho === "no" || !r.lunes) continue;
-    const f = sumaDias(r.lunes, r.dia || 0); if (!enV(f)) continue;
+    if (!r.lunes && r.tipo !== "resultado") continue;
+    if (r.tipo === "resultado") { const km = D[r.prueba] / 1000, t = segs(r.tiempo); if (km && t && enV(r.fecha, 84)) reales.push({ v: vdotDe(km * 1000, t), f: r.fecha, que: r.nombre || "carrera" }); continue; }
+    if (r.tipo !== "sesion" || r.hecho === "no") continue;
+    const f = sumaDias(r.lunes, r.dia || 0); if (!enV(f, 84)) continue;
     const ses = semanas[r.lunes]?.dias?.[r.dia]?.ses?.find(s => s.id === r.sesId);
     if (!ses || !["competicion", "test"].includes(ses.tipo) || ses.dep !== "run") continue;
     const km = r.act?.km || num(r.km) || (ses.tipo === "test" ? 5 : D[ses.carrera?.prueba] / 1000);
     const t = r.act?.dur || segs(r.tiempo);
     if (km >= 3 && t && t / km > 150 && t / km < 600) reales.push({ v: vdotDe(km * 1000, t), f, que: ses.tipo === "test" ? "test de 5 km" : ses.carrera?.nombre || "carrera" });
   }
-  // 2) ritmo frente a pulso
-  const porPulso = [];
-  const { fcmax, fcrep } = Z;
-  // 3) mejores tramos
+  const real = reales.filter(x => x.v >= 20 && x.v <= 80).sort((a, b) => b.f.localeCompare(a.f))[0] || null; // la más reciente
+  const marcas = Z.vdot && !Z.ritmoEstimado ? Z.vdot : null;
+  // 2) mejores tramos de 5 km o más en entrenos (8 semanas): cota mínima de su forma
   const tramos = [];
   for (const a of actividades) {
-    if (a.dep !== "run" || !enV(a.fecha) || !a.km || !a.dur) continue;
-    const ritmo = a.dur / a.km;
-    if (ritmo < 160 || ritmo > 600) continue;
-    for (const k of ["5k", "10k", "media", "maraton"]) if (a.mejores?.[k] && a.mejores[k] / (D[k] / 1000) > 150) tramos.push(vdotDe(D[k], a.mejores[k]));
-    if (fcmax && fcrep && a.fcMed && a.dur >= 1200 && a.km >= 3 && (!a.sube || a.sube / a.km < 15)) {
-      const hrr = (a.fcMed - fcrep) / (fcmax - fcrep);
-      if (hrr > 0.5 && hrr < 0.92) porPulso.push((vo2(1000 / ritmo * 60) - 3.5) / hrr + 3.5);
+    if (a.dep !== "run" || !enV(a.fecha, 56) || !a.km || !a.dur) continue;
+    for (const k of ["5k", "10k", "media", "maraton"]) if (a.mejores?.[k] && a.mejores[k] / (D[k] / 1000) > 170) tramos.push(vdotDe(D[k], a.mejores[k]));
+  }
+  let v = null, fuente = "", fiab = "";
+  if (real) { v = real.v; fuente = `su ${real.que} del ${real.f.slice(8)}/${real.f.slice(5, 7)}`; fiab = "alta"; }
+  else if (marcas) { v = marcas; fuente = "sus marcas"; fiab = "media"; }
+  else if (tramos.length) { v = Math.max(...tramos); fuente = `sus mejores tramos de entreno (${tramos.length})`; fiab = "baja"; }
+  if (!v) return null;
+  // un tramo de entreno mejor que su referencia indica que ha mejorado (con tope del 8 %)
+  const tr = tramos.length ? Math.max(...tramos) : 0;
+  if (tr > v * 1.01) { v = Math.min(tr, v * 1.08); fuente += " y sus mejores tramos recientes"; }
+  // 3) tendencia por pulso: a igual pulso, ¿corre más rápido que antes? (eficiencia), como mucho ±4 %
+  const { fcrep } = Z;
+  if (fcrep) {
+    const ef = (a) => a.dep === "run" && a.fcMed > fcrep + 20 && a.dur >= 1200 && a.km >= 3 && (!a.sube || a.sube / a.km < 15) && a.dur / a.km > 170 && a.dur / a.km < 600 ? (a.km * 1000 / (a.dur / 60)) / (a.fcMed - fcrep) : null;
+    const rec = actividades.filter(a => enV(a.fecha, 28)).map(ef).filter(Boolean);
+    const ant = actividades.filter(a => a.fecha && a.fecha <= sumaDias(fin, -28) && a.fecha > sumaDias(fin, -84)).map(ef).filter(Boolean);
+    if (rec.length >= 4 && ant.length >= 6) {
+      const ratio = Math.min(1.04, Math.max(0.96, mediana(rec) / mediana(ant)));
+      if (Math.abs(ratio - 1) >= 0.01) { v *= ratio; fuente += `, ajustado por su eficiencia ritmo/pulso (${ratio > 1 ? "+" : ""}${Math.round((ratio - 1) * 100)} %)`; }
     }
   }
-  const real = reales.sort((a, b) => b.v - a.v)[0] || null;
-  const pulso = porPulso.length >= 3 ? mediana(porPulso) : null;
-  const tramo = tramos.length ? Math.max(...tramos) : null;
-  let v = null, fuente = "", fiab = "";
-  if (real) { v = Math.max(real.v, tramo || 0); fuente = `su ${real.que} del ${real.f.slice(8)}/${real.f.slice(5, 7)}`; fiab = "alta"; }
-  else if (pulso) { v = Math.max(pulso, tramo || 0); fuente = `ritmo y pulso de ${porPulso.length} rodajes`; fiab = porPulso.length >= 6 ? "media" : "baja"; }
-  else if (tramo) { v = tramo; fuente = `sus mejores tramos de entreno (${tramos.length})`; fiab = "baja"; }
-  return v ? { v, fuente, fiab, n: reales.length + porPulso.length + tramos.length } : null;
+  if (marcas && fiab !== "alta") v = Math.min(v, marcas * 1.08);
+  v = Math.max(20, Math.min(80, v));
+  return { v, fuente, fiab, n: reales.length + tramos.length };
 }
 
 /**
