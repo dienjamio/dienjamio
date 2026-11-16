@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611160928";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611160954";
 
 /* =========================================================
    Catálogos
@@ -84,7 +84,9 @@ export function efectivo(a) {
   const fc = { ...(a.fc || {}) }, marcas = { ...(a.marcas || {}) }, de = {};
   if (!+fc.max && h.fcMaxObs) { fc.max = h.fcMaxObs; de.fcmax = true; }
   if (!+fc.umbral && h.lthr && !Array.isArray(fc.zonas)) { fc.umbral = h.lthr; de.umbral = true; }
-  for (const k of ["5k", "10k", "media", "maraton"]) if (!marcas[k] && h.mejores?.[k]) { marcas[k] = fmtHoras(h.mejores[k].s); de["m" + k] = true; }
+  // los mejores tramos de entrenos solo se usan si no hay NINGUNA marca real (un 10K entrenando no es una marca de 10K)
+  const conMarcas = ["1k", "5k", "10k", "15k", "media", "maraton"].some(k => parseTiempo(marcas[k]));
+  if (!conMarcas) for (const k of ["5k", "10k", "media", "maraton"]) if (h.mejores?.[k]) { marcas[k] = fmtHoras(h.mejores[k].s); de["m" + k] = true; }
   let ftp = a.ftp;
   if (!+ftp && h.ftpEst) { ftp = h.ftpEst; de.ftp = true; }
   if (!+fc.rep && h.fcRep) { fc.rep = h.fcRep; de.fcrep = true; }
@@ -197,6 +199,9 @@ export function calcZonas(a) {
       "5k": rango(carrera["5k"].p, 3, 3),
       series: rango(r(0.975), 4, 4)
     };
+    // ajuste fino del entrenador (s/km): + más lento, − más rápido
+    const aj = Math.max(-30, Math.min(30, +a.ajusteRitmos || 0));
+    if (aj) for (const k of Object.keys(tipos)) tipos[k] = tipos[k].map(x => x + aj);
     // zonas de ritmo coherentes con los ritmos con nombre
     ritmos = [tipos.recuperacion, tipos.rodaje, tipos.maraton, tipos.umbral, tipos.series];
   }
@@ -374,7 +379,8 @@ function colocar(a, T, F, ctx) {
   if (T.fuerzaTipo === "preventiva") reservaF = Math.min(T.k, Math.max(0, N - T.P.filter(s => s.tipo === "readapt").length));
   const nPropias = Math.min(T.P.length, Math.max(0, N - reservaF));
   const propias = T.P.slice(0, nPropias);
-  const extra = T.P.slice(nPropias, nPropias + T.dobles);
+  // con 3 días o menos no se doblan sesiones (salvo avanzados): mejor menos sesiones bien hechas
+  const extra = N <= 3 && a.nivel !== "avanzado" ? [] : T.P.slice(nPropias, nPropias + T.dobles);
 
   const rango = s => ({ largo: 1, transicion: 2, calidad: 2, test: 2, readapt: 2, iniciacion: 2, activacion: 3, tecnica: 4, recuperacion: 5, suave: 6 }[s.tipo] ?? 7);
   const duros = [...fijos];
@@ -555,6 +561,12 @@ function duraciones(a, semana, F, ctx, Z) {
     }
   };
   asignar(resis, E * aj);
+  // mínimos realistas: una sesión de calidad necesita calentamiento + bloque + vuelta a la calma
+  semana.forEach((dia, d) => dia.forEach(s => {
+    if (!resis.includes(s)) return;
+    const fl = s.dep === "run" ? { calidad: ini ? 35 : 40, largo: ini ? 40 : 50, suave: 25, recuperacion: 20 }[s.tipo] : s.dep === "bike" ? { calidad: 45, largo: 60, suave: 40 }[s.tipo] : 0;
+    if (fl && s.min < fl) s.min = Math.min(fl, maxDia(a, d) || fl);
+  }));
   // con historial, la tirada larga no baja de lo que ya hace (y crece poco a poco)
   if (a.hist?.largoRun && !F.descarga && !["puesta", "carrera"].includes(F.f)) {
     const w = clamp(Math.floor(diasEntre(lunesDe(a.hist.fecha), ctx.lunes) / 7), 0, 12);
@@ -1018,8 +1030,11 @@ export function menuDia(a, ses, carga, cargaSig, semilla) {
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
 /** Versión del generador: si cambia, las semanas futuras sin cambios a mano se rehacen solas. */
-export const MOTOR_V = 7;
+export const MOTOR_V = 8;
 export function generarSemana(a, lunes) {
+  // disponibilidad solo para esta semana (p. ej. «esta semana solo puede lunes y martes»)
+  const ds = a.dispSemana?.[lunes];
+  if (ds?.dias) a = { ...a, disp: [0, 1, 2, 3, 4, 5, 6].map(d => ({ on: ds.dias.includes(d), max: +ds.max || +(a.disp?.[d]?.max) || 90 })) };
   a = efectivo(a);
   const ctx = contexto(a, lunes);
   const F = calcFase(a, ctx);

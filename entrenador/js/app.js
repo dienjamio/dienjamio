@@ -1,18 +1,19 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611160928";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611160928";
-import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611160928";
-import { BIBLIO } from "./biblioteca.js?v=202611160928";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611160928";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611160928";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611160928";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611160928";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611160928";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611160928";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611160928";
-import { calcProgreso } from "./progreso.js?v=202611160928";
-import * as A from "./almacen.js?v=202611160928";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611160928";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611160954";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611160954";
+import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611160954";
+import { BIBLIO } from "./biblioteca.js?v=202611160954";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611160954";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611160954";
+import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611160954";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611160954";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611160954";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611160954";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611160954";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611160954";
+import { calcProgreso } from "./progreso.js?v=202611160954";
+import * as A from "./almacen.js?v=202611160954";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611160954";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -236,7 +237,10 @@ function alertas(a) {
   const prev = [1, 2, 3].map(i => tot(sumaDias(l0, -7 * i))).filter(Boolean);
   if (tot(l0) && prev.length) { const media = prev.reduce((x, y) => x + y, 0) / prev.length; const sube = Math.round((tot(l0) / media - 1) * 100); if (sube > 15) out.push({ t: `📈 Sube un ${sube} % de carga esta semana`, g: sube > 30 }); }
   const sig = sumaDias(l0, 7);
-  if (tot(sig) && tot(l0)) { const sube = Math.round((tot(sig) / tot(l0) - 1) * 100); if (sube > 20) out.push({ t: `📈 La semana que viene sube un ${sube} %`, g: false }); }
+  // si esta semana está recortada a propósito (días sueltos o volumen bajado), se compara con las anteriores
+  const recortada = a.dispSemana?.[l0] || (a.ajustes?.[l0] || 1) < 1;
+  const baseSig = recortada && prev.length ? prev.reduce((x, y) => x + y, 0) / prev.length : tot(l0);
+  if (tot(sig) && baseSig) { const sube = Math.round((tot(sig) / baseSig - 1) * 100); if (sube > 20) out.push({ t: `📈 La semana que viene sube un ${sube} %`, g: false }); }
   const vals = (a._aportes || []).filter(x => x.tipo === "semana").sort((x, y) => y.lunes.localeCompare(x.lunes));
   if (vals.length >= 2 && vals.slice(0, 2).every(v => ["dura", "excesiva"].includes(v.sensacion))) out.push({ t: "🥵 Dos semanas seguidas duras", g: true });
   if (vals[0]?.molestias && vals[0].lunes >= sumaDias(l0, -7)) out.push({ t: `🤕 Molestias${vals[0].molestiasTxt ? ": " + vals[0].molestiasTxt.slice(0, 40) : ""}`, g: true });
@@ -299,6 +303,7 @@ function escribirForm(a) {
   set("fcmax", a.fc?.max); set("fcrep", a.fc?.rep); set("fcumbral", a.fc?.umbral);
   set("m1k", a.marcas?.["1k"]); set("m15k", a.marcas?.["15k"]); set("m5k", a.marcas?.["5k"]); set("m10k", a.marcas?.["10k"]); set("mmedia", a.marcas?.media); set("mmaraton", a.marcas?.maraton);
   ["run", "bike", "swim", "fuerza"].forEach(n => { f.elements[n].checked = !!a.deportes?.[n]; });
+  f.elements.usaCinta.checked = a.usaCinta !== false; set("reloj", a.reloj); set("ajusteRitmos", a.ajusteRitmos || "");
   f.elements.sinGluten.checked = !!a.sinGluten; f.elements.sinLactosa.checked = !!a.sinLactosa;
   (a.disp || []).forEach((d, i) => { $(`[data-dia="${i}"]`).checked = !!d.on; $(`[data-max="${i}"]`).value = minTxt(+d.max); });
   const rp = Array.isArray(a.ritmosZona);
@@ -324,6 +329,7 @@ function leerForm() {
     disp, horas: num("horas"), descanso: +v("descanso"),
     fc: { max: num("fcmax"), rep: num("fcrep"), umbral: num("fcumbral"), zonas }, ritmosZona,
     marcas: { "1k": v("m1k"), "15k": v("m15k"), "5k": v("m5k"), "10k": v("m10k"), media: v("mmedia"), maraton: v("mmaraton") }, ftp: num("ftp"), css: v("css"),
+    usaCinta: f.elements.usaCinta.checked, reloj: v("reloj"), ajusteRitmos: Math.max(-30, Math.min(30, parseInt(v("ajusteRitmos"), 10) || 0)),
     dieta: v("dieta"), comidas: +v("comidas"), sinGluten: f.elements.sinGluten.checked, sinLactosa: f.elements.sinLactosa.checked,
     notas: v("notas"), mensaje: v("mensaje")
   };
@@ -425,7 +431,7 @@ async function actualizarFuturas(a) {
    ========================================================= */
 const enlace = a => new URL(`ver.html?d=${a.token}`, location.href).href;
 /** Versión de lo publicado: súbela cuando cambien cálculos que ve el deportista. */
-const PUB_V = 4;
+const PUB_V = 5;
 const AV_DEF = { registros: true, bienestar: true, mensajes: true, resultados: true, valoraciones: true };
 const prefAvisos = () => ({ ...AV_DEF, ...(ajustes.avisos || {}) });
 async function canalEntrenador() {
@@ -460,7 +466,7 @@ async function publicar(a) {
       videos: ajustes.videos || {},
       actividades: (a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep))
         .map(({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det }) => ({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det })),
-      mujer: a.sexo === "m",
+      mujer: a.sexo === "m", usaCinta: a.usaCinta !== false, reloj: a.reloj || "",
       zonas: { fcmax: Z.fcmax, fcrep: Z.fcrep, fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo, tipos: Z.tipos, vdot: Z.vdot, ritmoEstimado: Z.ritmoEstimado, ritmosPropios: Z.ritmosPropios },
       semanas,
       // historial (semanas pasadas, en corto) y esquema del plan futuro (solo fases y volumen: nunca las sesiones)
@@ -571,6 +577,7 @@ function pintarAtleta() {
     + (htmlActividades((a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep)), "Sus actividades (12 semanas)") || `<p class="muted small">Sin actividades: súbelas en «Datos» o pídele que suba el archivo de su reloj al registrar cada entreno.</p>`);
   else if (sub === "datos") pintarDatos();
   else if (sub === "chat") pintarChat();
+  else if (sub === "asistente") pintarAsistente();
   else if (sub === "resumen") el.innerHTML = htmlResumen(a);
   else if (sub === "zonas") el.innerHTML = `<article class="dia zonas">${htmlZonas(calcZonas(a))}</article>${htmlFuentes(a)}`;
 }
@@ -647,6 +654,90 @@ function htmlResumen(a) {
     </div>
     <div class="fila r-acc">${sinLeer ? `<button class="btn pri mini" data-sub="chat">💬 ${sinLeer} mensaje${sinLeer > 1 ? "s" : ""} sin leer</button>` : `<button class="btn sec mini" data-sub="chat">💬 Escribirle</button>`}<button class="btn sec mini" data-sub="semana">📅 Ver su semana</button><button class="btn sec mini" data-sub="progreso">📈 Progreso</button></div>
     </article>`;
+}
+
+/* ---------------- Asistente (Claude cambia el plan por ti) ---------------- */
+const conversaciones = {}; // por deportista: [{ role, content, prop?, estado? }]
+function pintarAsistente() {
+  const a = actual, c = conversaciones[a.id] || [];
+  const ejemplos = ["Esta semana solo puede entrenar lunes y martes: métele carrera esos dos días y quítale la fuerza", "Bájale un 20 % el volumen de la semana que viene, va muy cargado", "Sus ritmos le salen rápidos: ponlos 5 segundos más lentos", "Cámbiale el menú a sin lactosa y con 4 comidas", "No tiene cinta: quítale los ritmos de cinta"];
+  $("#sub").innerHTML = `<article class="dia asist"><div class="dia-cab"><h3>🤖 Asistente para ${esc(a.nombre.split(" ")[0])}</h3>${c.length ? `<button class="btn sec mini" data-acc="asist-borrar">Nueva conversación</button>` : ""}</div>
+    ${claveClaude() ? "" : `<p class="alerta">Necesitas tu clave de Claude: ponla en Herramientas → Claude.</p>`}
+    <div class="chat-hilo" id="asist-hilo">${c.length ? c.map((m, i) => `<div class="burbuja ${m.role === "user" ? "mia" : "suya"}">${esc(m.content).replace(/\n/g, "<br>")}${m.prop ? htmlPropuesta(m.prop, i, m.estado === "aplicada") : ""}${m.estado === "descartada" ? `<div class="small muted">Descartado</div>` : ""}</div>`).join("")
+      : `<div class="chat-vacio">Dime qué quieres cambiarle y lo preparo para que lo apruebes. Por ejemplo:<div class="ej-asist">${ejemplos.map(e => `<button class="pill" data-acc="asist-ej">${esc(e)}</button>`).join("")}</div></div>`}</div>
+    <div class="chat-caja"><div class="chat-fila"><textarea id="asist-txt" rows="2" placeholder="Ej.: esta semana solo puede el lunes y el martes…"></textarea><button class="btn pri" data-acc="asist-enviar" aria-label="Enviar">➤</button></div></div>
+  </article>`;
+  const h = $("#asist-hilo"); h.scrollTop = h.scrollHeight;
+}
+async function enviarAsistente(a, texto) {
+  if (!texto) return;
+  const c = conversaciones[a.id] = conversaciones[a.id] || [];
+  c.push({ role: "user", content: texto });
+  pintarAsistente();
+  $("#asist-hilo").insertAdjacentHTML("beforeend", `<div class="burbuja suya pensando">🤖 Pensando…</div>`);
+  try {
+    const { texto: t, propuesta } = await preguntar(c.filter(m => m.role === "user" || m.content).map(m => ({ role: m.role, content: m.content })), ctxAsistente(a, calcZonas(a)));
+    c.push({ role: "assistant", content: t || propuesta?.resumen || "Hecho.", prop: propuesta });
+  } catch (e) { c.push({ role: "assistant", content: "⚠️ " + e.message }); }
+  pintarAsistente();
+}
+/** Ejecuta las acciones aprobadas. Devuelve un resumen de lo hecho. */
+async function aplicarAcciones(a, acciones) {
+  const hecho = [], tocadas = new Set();
+  const semana = l => { if (!a.semanas[l]) a.semanas[l] = generarSemana(a, l); return a.semanas[l]; };
+  for (const x of acciones) {
+    const l = lunesDeSemana(x.semana);
+    if (x.tipo === "disponibilidad_semana" && x.dias?.length) {
+      a.dispSemana = { ...(a.dispSemana || {}), [l]: { dias: x.dias, max: x.minutos || null } };
+      a.semanas[l] = generarSemana(a, l); tocadas.add(l); hecho.push(`semana del ${l} rehecha con ${x.dias.map(d => DIAS[d]).join(" y ")}`);
+    } else if (x.tipo === "quitar_sesiones") {
+      const sn = semana(l); let n = 0;
+      sn.dias.forEach((d, i) => { const antes = d.ses.length; d.ses = d.ses.filter(y => !(x.sesion_id ? y.id === x.sesion_id : (!x.deporte || y.dep === x.deporte) && (!x.dias?.length || x.dias.includes(i)))); n += antes - d.ses.length; });
+      if (n) { sn.editada = true; tocadas.add(l); hecho.push(`${n} sesión${n > 1 ? "es" : ""} quitada${n > 1 ? "s" : ""}`); }
+    } else if (x.tipo === "cambiar_sesion" && x.sesion_id) {
+      const sn = semana(l);
+      for (let i = 0; i < 7; i++) {
+        const k = sn.dias[i].ses.findIndex(y => y.id === x.sesion_id); if (k < 0) continue;
+        const y = sn.dias[i].ses[k];
+        if (x.titulo) y.t = x.titulo; if (x.minutos) y.min = x.minutos; if (x.pasos?.length) y.p = x.pasos; if (x.nota != null) y.n = x.nota;
+        if (x.titulo || x.minutos || x.pasos?.length) { y.c = null; y.est = null; y.tr = null; }
+        y.editada = true;
+        if (x.dia != null && x.dia !== i) { sn.dias[i].ses.splice(k, 1); sn.dias[x.dia].ses.push(y); }
+        sn.editada = true; tocadas.add(l); hecho.push(`sesión «${y.t}» cambiada`); break;
+      }
+    } else if (x.tipo === "anadir_sesion") {
+      const sn = semana(l), y = { ...sesionVacia(x.deporte || "run"), t: x.titulo || "Entreno", min: x.minutos || 45, p: x.pasos || [], n: x.nota || "" };
+      if (y.dep === "fuerza") y.tipo = "fuerza"; else y.tipo = y.min >= 90 ? "largo" : "suave";
+      sn.dias[x.dia ?? 0].ses.push(y); sn.editada = true; tocadas.add(l); hecho.push(`añadida «${y.t}» el ${DIAS[x.dia ?? 0]}`);
+    } else if (x.tipo === "volumen_semana" && x.factor) {
+      a.ajustes = { ...(a.ajustes || {}), [l]: Math.round(x.factor * 100) / 100 };
+      a.semanas[l] = generarSemana(a, l); tocadas.add(l); hecho.push(`volumen de la semana del ${l} al ${Math.round(x.factor * 100)} %`);
+    } else if (x.tipo === "ajuste_ritmos" && x.segundos != null) {
+      a.ajusteRitmos = Math.max(-30, Math.min(30, x.segundos)); hecho.push(`ritmos ajustados ${a.ajusteRitmos > 0 ? "+" : ""}${a.ajusteRitmos} s/km`);
+      a._rehacerFuturas = true;
+    } else if (x.tipo === "rehacer_semana") {
+      a.semanas[l] = generarSemana(a, l); tocadas.add(l); hecho.push(`semana del ${l} rehecha`);
+    } else if (x.tipo === "menu") {
+      if (x.dieta) a.dieta = x.dieta; if (x.comidas) a.comidas = x.comidas;
+      if (x.sin_gluten != null) a.sinGluten = x.sin_gluten; if (x.sin_lactosa != null) a.sinLactosa = x.sin_lactosa;
+      for (const lm of [lunesDe(hoy()), sumaDias(lunesDe(hoy()), 7)]) {
+        const sn = a.semanas[lm]; if (!sn) continue;
+        if (x.nuevo_menu) sn.dias.forEach((d, i) => { if (!x.dias?.length || x.dias.includes(i)) d.menuVar = (d.menuVar || 0) + 1; });
+        recalcular(a, sn); tocadas.add(lm);
+      }
+      hecho.push("menú actualizado");
+    } else if (x.tipo === "usa_cinta") {
+      a.usaCinta = !!x.valor; hecho.push(x.valor ? "con ritmos de cinta" : "sin cinta: todo en min/km");
+    } else if (x.tipo === "mensaje_deportista" && x.texto) {
+      const id = idMensaje(), m = { tipo: "mensaje", de: "entrenador", texto: x.texto, t: new Date().toISOString(), leido: false };
+      try { await A.guardarAporte(a.token, id, m); (a._aportes = a._aportes || []).push({ ...m, id }); avisarDeportista(a, "💬 Mensaje de tu entrenador", x.texto.slice(0, 300)); hecho.push("mensaje enviado"); } catch (e) { hecho.push("⚠️ no se pudo enviar el mensaje"); }
+    }
+  }
+  for (const l of tocadas) { recalcular(a, a.semanas[l]); await A.guardarSemana(a, a.semanas[l]); }
+  await A.guardarFicha(a);
+  if (a._rehacerFuturas) { delete a._rehacerFuturas; await actualizarFuturas(a); for (const l of [lunesDe(hoy()), sumaDias(lunesDe(hoy()), 7)]) if (a.semanas[l]) { refrescarRitmos(a, a.semanas[l]); await A.guardarSemana(a, a.semanas[l]); } }
+  await publicar(a);
+  return hecho;
 }
 
 /* ---------------- Chat ---------------- */
@@ -1409,6 +1500,17 @@ function enlazar() {
     if (acc === "chat-enviar") return enviarMensaje(a);
     if (acc === "chat-recargar") { try { a._aportes = await A.listarAportes(a.token); } catch (e) { } return pintarChat(); }
     if (acc === "informe") return dialogoInforme(a);
+    if (acc === "asist-enviar") { const t_ = $("#asist-txt").value.trim(); return enviarAsistente(a, t_); }
+    if (acc === "asist-ej") return enviarAsistente(a, t.textContent.trim());
+    if (acc === "asist-borrar") { conversaciones[a.id] = []; return pintarAsistente(); }
+    if (acc === "aplicar-prop" || acc === "descartar-prop") {
+      const m = (conversaciones[a.id] || [])[+t.dataset.i]; if (!m?.prop) return;
+      if (acc === "descartar-prop") { m.estado = "descartada"; return pintarAsistente(); }
+      t.disabled = true; t.textContent = "Aplicando…";
+      try { const h = await aplicarAcciones(a, m.prop.acciones || []); m.estado = "aplicada"; conversaciones[a.id].push({ role: "assistant", content: `✅ Hecho: ${h.join("; ") || "sin cambios"}. Su enlace ya está al día.` }); }
+      catch (e) { conversaciones[a.id].push({ role: "assistant", content: "⚠️ No se ha podido aplicar: " + e.message }); }
+      return pintarAsistente();
+    }
     if (acc === "aviso-movil") {
       return dialogo(`<h3>🔔 Aviso a su móvil</h3>
         <p class="small">Le llega como notificación si ha activado los avisos en su enlace (Progreso → 🔔 Avisos en tu móvil, con la app ntfy). Al pulsarla abre su plan.</p>

@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Figtree:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=202611160928">
+<link rel="stylesheet" href="styles.css?v=202611160954">
 </head>
 <body>
 <header class="top no-print">
@@ -126,6 +126,9 @@
           <label>Maratón <input name="mmaraton" placeholder="h:mm:ss"></label>
           <label>FTP bici (vatios) <input name="ftp" type="number" min="80" max="500"></label>
           <label>Ritmo umbral nado (/100 m) <input name="css" placeholder="m:ss"></label>
+          <label>Ajuste fino de ritmos (s/km) <input name="ajusteRitmos" type="number" step="1" min="-30" max="30" placeholder="0"><small>+5 = todos sus ritmos 5" más lentos; −5 = más rápidos</small></label>
+          <label>Su reloj <select name="reloj"><option value="">—</option><option value="garmin">Garmin</option><option value="polar">Polar</option><option value="coros">Coros</option><option value="suunto">Suunto</option><option value="apple">Apple Watch</option><option value="otro">Otro / móvil</option></select></label>
+          <label class="chip"><input type="checkbox" name="usaCinta"> Tiene cinta de correr (mostrarle ritmos en km/h)</label>
         </div>
         <small>Con una sola marca reciente basta: el resto se calcula.</small>
       </fieldset>
@@ -188,6 +191,7 @@
       <button data-sub="datos">Datos</button>
       <button data-sub="zonas">Zonas</button>
       <button data-sub="chat">💬 Chat</button>
+      <button data-sub="asistente">🤖 Asistente</button>
     </nav>
     <div class="weeknav no-print" id="weeknav"></div>
     <div id="sub"></div>
@@ -265,6 +269,6 @@
 <dialog id="dlg-gen" class="hoja"><div id="gen"></div></dialog>
 
 <div class="toast" id="toast" hidden></div>
-<script type="module" src="js/app.js?v=202611160928"></script>
+<script type="module" src="js/app.js?v=202611160954"></script>
 </body>
 </html>

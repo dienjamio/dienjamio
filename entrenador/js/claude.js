@@ -60,3 +60,32 @@ export async function analizar(pedido, datos, imagenes = []) {
 export async function probarClave() {
   return analizar("Responde solo: «Conectado».", "Prueba de conexión.");
 }
+
+/**
+ * Asistente con herramientas: devuelve la respuesta completa (bloques de texto y de herramienta).
+ * mensajes: historial [{ role, content }]; tools: definiciones de herramientas.
+ */
+export async function asistente(sistema, mensajes, tools) {
+  const client = await cliente();
+  let r;
+  try {
+    r = await client.beta.messages.create({
+      model: MODELO,
+      max_tokens: 16000,
+      output_config: { effort: "medium" },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system: sistema,
+      tools,
+      messages: mensajes
+    });
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) throw new Error("La clave de Claude no es válida. Revísala en Herramientas → Claude.");
+    if (e instanceof Anthropic.RateLimitError) throw new Error("Demasiadas peticiones seguidas: espera un minuto y vuelve a probar.");
+    if (e instanceof Anthropic.APIConnectionError) throw new Error("No se ha podido conectar con Claude. Revisa la conexión.");
+    if (e instanceof Anthropic.APIError) throw new Error(`Claude ha devuelto un error (${e.status || "?"}): ${e.message}`);
+    throw e;
+  }
+  if (r.stop_reason === "refusal") throw new Error("Claude no ha querido hacer este cambio.");
+  return r;
+}

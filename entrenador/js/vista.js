@@ -1,8 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611160928";
-import { htmlDetalle } from "./detalle.js?v=202611160928";
-import { infoEjercicio } from "./biblioteca.js?v=202611160928";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611160928";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611160954";
+import { htmlDetalle } from "./detalle.js?v=202611160954";
+import { infoEjercicio } from "./biblioteca.js?v=202611160954";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611160954";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -204,7 +204,7 @@ export function htmlZonas(Z) {
   const kmh = r => (3600 / ((r[0] + r[1]) / 2)).toFixed(1).replace(".", ",");
   const tipos = Z.tipos ? `<h3>Tus ritmos${Z.vdot && !Z.ritmosPropios ? ` <small>(VDOT ${String(Z.vdot).replace(".", ",")}${Z.ritmoEstimado ? ", estimado" : ""})</small>` : ""}</h3><div class="wrap"><table class="ritmos-t"><tr><th>Ritmo</th><th>Calle /km</th><th>Cinta</th><th>Pulso</th></tr>
     ${Object.entries(Z.tipos).map(([k, r]) => { const zi = ZONA_RITMO[k] - 1; return `<tr><td>${NOMBRE_RITMO[k]}</td><td>${fmtRitmo(r[0])}-${fmtRitmo(r[1])}</td><td>${kmh(r)} km/h</td><td>${Z.fc[zi][0]}-${Z.fc[zi][1]}</td></tr>`; }).join("")}
-    </table></div><small>Cinta: pon un 1-2 % de inclinación para que cueste lo mismo que en la calle. Con calor, viento o cuestas, manda el pulso y la sensación, no el ritmo.</small>` : "";
+    </table></div><small class="nota-cinta">Cinta: pon un 1-2 % de inclinación para que cueste lo mismo que en la calle. Con calor, viento o cuestas, manda el pulso y la sensación, no el ritmo.</small>` : "";
   return `${tipos}<h3>Zonas de entrenamiento</h3>
     <div class="wrap"><table><tr><th>Zona</th><th>Pulso</th>${Z.ritmos ? "<th>Ritmo /km</th>" : ""}${Z.potencia ? "<th>Vatios</th>" : ""}${Z.nado ? "<th>Nado /100 m</th>" : ""}<th>Sensación</th></tr>
     ${[0, 1, 2, 3, 4].map(fila).join("")}</table></div>
