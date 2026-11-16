@@ -1,19 +1,19 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611160954";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611160954";
-import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611160954";
-import { BIBLIO } from "./biblioteca.js?v=202611160954";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611160954";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611160954";
-import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611160954";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611160954";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611160954";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611160954";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611160954";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611160954";
-import { calcProgreso } from "./progreso.js?v=202611160954";
-import * as A from "./almacen.js?v=202611160954";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611160954";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611161051";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611161051";
+import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611161051";
+import { BIBLIO } from "./biblioteca.js?v=202611161051";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611161051";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611161051";
+import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611161051";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611161051";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611161051";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611161051";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611161051";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611161051";
+import { calcProgreso } from "./progreso.js?v=202611161051";
+import * as A from "./almacen.js?v=202611161051";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611161051";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -335,6 +335,15 @@ function leerForm() {
   };
 }
 
+function previaRitmos() {
+  const f = $("#form"), v = n => f.elements[n]?.value?.trim() || "";
+  const marcas = { "1k": v("m1k"), "5k": v("m5k"), "10k": v("m10k"), "15k": v("m15k"), media: v("mmedia"), maraton: v("mmaraton") };
+  const mal = Object.entries(marcas).filter(([, t]) => t && !parseTiempo(t)).map(([k]) => k);
+  const Z = calcZonas({ edad: +v("edad") || 35, sexo: v("sexo") || "h", nivel: v("nivel") || "intermedio", marcas, fc: {}, ajusteRitmos: parseInt(v("ajusteRitmos"), 10) || 0 });
+  const T = Z.tipos, r = k => T?.[k] ? `${fmtRitmo(T[k][0])}-${fmtRitmo(T[k][1])}` : "—";
+  $("#prev-ritmos").innerHTML = mal.length ? `<p class="alerta">No entiendo la marca de ${mal.join(", ")}: escríbela como 22:28 o 1:45:00.</p>`
+    : `<b>${Z.ritmoEstimado ? "Ritmos estimados (sin marcas)" : "Así le saldrán sus ritmos"}</b><div class="pr-grid"><span>Regenerativo <b>${r("recuperacion")}</b></span><span>Rodaje <b>${r("rodaje")}</b></span><span>Tirada <b>${r("tirada")}</b></span><span>Umbral <b>${r("umbral")}</b></span><span>Ritmo 10K <b>${r("10k")}</b></span><span>Series <b>${r("series")}</b></span></div>`;
+}
 function validar(d) {
   if (!d.nombre) return "Falta el nombre.";
   if (!d.edad || !d.peso || !d.altura) return "Faltan edad, peso o altura (se usan para el menú).";
@@ -390,6 +399,7 @@ function formNuevo() {
   $("#btn-guardar").textContent = "Crear deportista y generar su plan";
   $("#btn-borrar").hidden = true;
   prepararSubidaForm();
+  previaRitmos();
   vista("nuevo");
 }
 function formEditar() {
@@ -399,6 +409,7 @@ function formEditar() {
   $("#btn-guardar").textContent = "Guardar cambios";
   $("#btn-borrar").hidden = false;
   prepararSubidaForm();
+  previaRitmos();
   vista("nuevo");
   $$("#pestanas [data-vista]").forEach(b => b.setAttribute("aria-selected", b.dataset.vista === "atleta"));
 }
@@ -419,11 +430,15 @@ async function actualizarFuturas(a) {
   const desde = lunesDe(hoy());
   let hechas = 0, manuales = 0;
   for (const l of Object.keys(a.semanas).filter(l => l >= desde)) {
-    if (a.semanas[l].editada || conRegistros(a, l)) { manuales++; continue; }
+    if (a.semanas[l].editada || conRegistros(a, l)) {
+      // no se rehace (tiene registros o cambios a mano), pero sus ritmos sí se ponen al día
+      if (refrescarRitmos(a, a.semanas[l])) { recalcular(a, a.semanas[l]); await A.guardarSemana(a, a.semanas[l]); }
+      manuales++; continue;
+    }
     a.semanas[l] = generarSemana(a, l); await A.guardarSemana(a, a.semanas[l]); hechas++;
   }
   await asegurarSemanas(a);
-  return `Guardado. ${hechas ? `Plan actualizado (${hechas} semana${hechas > 1 ? "s" : ""}).` : ""}${manuales ? ` ${manuales} semana${manuales > 1 ? "s" : ""} con cambios a mano o con entrenos ya registrados no se ha${manuales > 1 ? "n" : ""} tocado: usa «Rehacer semana» si quieres.` : ""}`;
+  return `Guardado. ${hechas ? `Plan actualizado (${hechas} semana${hechas > 1 ? "s" : ""}).` : ""}${manuales ? ` En ${manuales} semana${manuales > 1 ? "s" : ""} con cambios a mano o entrenos ya registrados solo se han puesto al día los ritmos.` : ""}`;
 }
 
 /* =========================================================
@@ -431,7 +446,7 @@ async function actualizarFuturas(a) {
    ========================================================= */
 const enlace = a => new URL(`ver.html?d=${a.token}`, location.href).href;
 /** Versión de lo publicado: súbela cuando cambien cálculos que ve el deportista. */
-const PUB_V = 5;
+const PUB_V = 6;
 const AV_DEF = { registros: true, bienestar: true, mensajes: true, resultados: true, valoraciones: true };
 const prefAvisos = () => ({ ...AV_DEF, ...(ajustes.avisos || {}) });
 async function canalEntrenador() {
@@ -1635,6 +1650,8 @@ function enlazar() {
   $("#form").addEventListener("submit", guardarForm);
   $("#form").elements.objetivo.addEventListener("change", mostrarSegunObjetivo);
   $("#zonas-propias").addEventListener("change", e => { $("#zp").hidden = !e.target.checked; });
+  // vista previa en directo de sus ritmos mientras escribes las marcas
+  $("#form").addEventListener("input", e => { if (/^(m1k|m5k|m10k|m15k|mmedia|mmaraton|ajusteRitmos|edad|sexo|nivel)$/.test(e.target.name || "")) previaRitmos(); });
   document.addEventListener("change", async e => {
     const k = e.target.dataset?.aviso; if (!k) return;
     ajustes.avisos = { ...prefAvisos(), [k]: e.target.checked };

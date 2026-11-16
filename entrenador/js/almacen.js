@@ -4,7 +4,7 @@
      entrenadores/{uid}/deportistas/{id}/semanas/{lunes}   plan de cada semana
      entrenadores/{uid}/deportistas/{id}/archivos/{fid}    PDF e informes (hasta ~700 KB)
      publico/{token}                                 lo que ve el deportista con su enlace */
-import { firebaseConfig } from "./firebase-config.js?v=202611160954";
+import { firebaseConfig } from "./firebase-config.js?v=202611161051";
 
 const V = "10.12.2";
 const SDK = n => `https://www.gstatic.com/firebasejs/${V}/firebase-${n}.js`;

@@ -1,6 +1,6 @@
 /* Motor del plan: decide las sesiones de la semana, su contenido y el menú.
    Trabaja con semanas reales (lunes AAAA-MM-DD) y con las carreras del deportista. */
-import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611160954";
+import { clamp, r5, fmtMin, fmtRitmo, fmtHoras, parseTiempo, rng, sumaDias, diaSemana, diasEntre, uid, lunesDe } from "./util.js?v=202611161051";
 
 /* =========================================================
    Catálogos
@@ -189,9 +189,11 @@ export function calcZonas(a) {
     // ritmos con nombre (s/km, [rápido, lento])
     const rango = (p, a, b) => [Math.round(p - a), Math.round(p + b)];
     tipos = {
-      recuperacion: [Math.round(r(0.62)), Math.round(r(0.57))],
-      rodaje: [Math.round(r(0.68)), Math.round(r(0.63))],
-      tirada: [Math.round(r(0.66)), Math.round(r(0.62))],
+      // ritmos suaves en la parte rápida del rango de Daniels: así entrenan de verdad los populares
+      // (p. ej. 5K 22:28 / 10K 49:13 → regenerativo 6:05-6:15, rodaje 5:52-6:05, tirada 5:56-6:09)
+      recuperacion: [Math.round(r(0.67)), Math.round(r(0.647))],
+      rodaje: [Math.round(r(0.70)), Math.round(r(0.67))],
+      tirada: [Math.round(r(0.69)), Math.round(r(0.66))],
       maraton: rango(carrera.maraton.p, 4, 4),
       media: rango(carrera.media.p, 4, 4),
       umbral: rango(r(0.88), 4, 4),
@@ -1030,7 +1032,7 @@ export function menuDia(a, ses, carga, cargaSig, semilla) {
    Semana completa (instantánea que se guarda y se publica)
    ========================================================= */
 /** Versión del generador: si cambia, las semanas futuras sin cambios a mano se rehacen solas. */
-export const MOTOR_V = 8;
+export const MOTOR_V = 9;
 export function generarSemana(a, lunes) {
   // disponibilidad solo para esta semana (p. ej. «esta semana solo puede lunes y martes»)
   const ds = a.dispSemana?.[lunes];
@@ -1069,12 +1071,25 @@ export function generarSemana(a, lunes) {
  */
 export function refrescarRitmos(a, snap) {
   const nueva = generarSemana(a, snap.lunes);
+  const Z = calcZonas(efectivo(a));
+  const zonaTxt = /Z([1-5]) a \d+:\d\d-\d+:\d\d \/km \(\d+-\d+ ppm\)/g;
   let n = 0;
   snap.dias.forEach((d, i) => d.ses.forEach(s => {
     if (s.editada || s.tipo === "manual") return;
     const x = nueva.dias[i]?.ses.find(y => y.dep === s.dep && y.tipo === s.tipo && y.min === s.min);
-    if (!x) return;
-    Object.assign(s, { z: x.z, p: x.p, n: x.n, c: x.c, est: x.est, tr: x.tr, obj: x.obj }); n++;
+    if (x) { Object.assign(s, { z: x.z, p: x.p, n: x.n, c: x.c, est: x.est, tr: x.tr, obj: x.obj }); n++; return; }
+    if (s.dep !== "run") return;
+    // misma sesión, ritmos nuevos: se recalculan sus tramos y los ritmos escritos en el texto
+    if (s.tr?.length) {
+      const res = t => t && ({ ...t, r: Z.tipos?.[t.k] || null, f: ZONA_RITMO[t.k] ? Z.fc[ZONA_RITMO[t.k] - 1] : t.k === "cuesta" ? Z.fc[4] : t.k === "trote" ? Z.fc[0] : null });
+      s.tr = s.tr.map(t => ({ ...res(t), par: t.par ? res(t.par) : undefined, rr: t.rec ? (Z.tipos?.recuperacion || null) : undefined }));
+      if (Z.tipos) s.c = { calle: textoTramos(s.tr, Z, "calle"), cinta: textoTramos(s.tr, Z, "cinta") };
+    }
+    const cambia = t => typeof t === "string" ? t.replace(zonaTxt, (_, z) => zt(Z, "run", +z)) : t;
+    s.z = cambia(s.z); s.p = (s.p || []).map(cambia); s.n = cambia(s.n);
+    const rk = { suave: "rodaje", largo: "tirada", recuperacion: "recuperacion" }[s.tipo];
+    if (s.obj && rk && Z.tipos?.[rk]) s.obj = { ...s.obj, ritmo: Z.tipos[rk].slice() };
+    n++;
   }));
   snap.ritmosV = MOTOR_V;
   return n;

@@ -7,10 +7,11 @@ export const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;"
 export const fmtMin = m => { m = Math.round(m); const h = Math.floor(m / 60), r = m % 60; return h ? (r ? `${h} h ${r}'` : `${h} h`) : `${r}'`; };
 export const fmtRitmo = s => { s = Math.round(s); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 export const fmtHoras = s => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+/** Tiempo escrito de cualquier forma: «22:28», «22.28», «22,28», «22'28''», «49 13», «1h45:00», «1:45:00». */
 export const parseTiempo = t => {
   if (!t) return 0;
-  const p = String(t).trim().replace(",", ".").split(":").map(Number);
-  if (p.some(isNaN)) return 0;
+  const p = String(t).trim().toLowerCase().replace(/(min|seg|s)\b/g, "").split(/[:.,'’´"″h\s]+/).filter(Boolean).map(Number);
+  if (!p.length || p.some(isNaN)) return 0;
   return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p.length === 2 ? p[0] * 60 + p[1] : 0;
 };
 export function rng(seed) {

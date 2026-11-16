@@ -1,6 +1,6 @@
 /* Pasar los entrenos al reloj: los pasos exactos (duración, ritmo objetivo, repeticiones) con el vocabulario
    de cada marca, y cómo crearlos en su app. Los menús pueden cambiar algo según el modelo y la versión. */
-import { esc, fmtRitmo, DIAS, sumaDias, fechaCorta } from "./util.js?v=202611160954";
+import { esc, fmtRitmo, DIAS, sumaDias, fechaCorta } from "./util.js?v=202611161051";
 
 export const MARCAS = { garmin: "Garmin", polar: "Polar", coros: "Coros", suunto: "Suunto", apple: "Apple Watch", otro: "Otro" };
 const V = {
