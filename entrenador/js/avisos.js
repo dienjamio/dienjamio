@@ -1,7 +1,7 @@
 /* Avisos al móvil con ntfy (https://ntfy.sh): gratis, sin cuenta ni servidor propio.
    Cada persona instala la app ntfy y se suscribe a su «canal» secreto (un nombre largo y aleatorio).
    La app publica en ese canal con una petición web y ntfy hace llegar la notificación al móvil. */
-import { esc } from "./util.js?v=202611142037";
+import { esc } from "./util.js?v=202611160928";
 
 export const NTFY = "https://ntfy.sh";
 const LETRAS = "abcdefghijkmnpqrstuvwxyz23456789";

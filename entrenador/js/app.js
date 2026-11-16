@@ -1,18 +1,18 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611142037";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611142037";
-import { htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611142037";
-import { BIBLIO } from "./biblioteca.js?v=202611142037";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611142037";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611142037";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611142037";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611142037";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611142037";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611142037";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611142037";
-import { calcProgreso } from "./progreso.js?v=202611142037";
-import * as A from "./almacen.js?v=202611142037";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611142037";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611160928";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611160928";
+import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611160928";
+import { BIBLIO } from "./biblioteca.js?v=202611160928";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611160928";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611160928";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611160928";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611160928";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611160928";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611160928";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611160928";
+import { calcProgreso } from "./progreso.js?v=202611160928";
+import * as A from "./almacen.js?v=202611160928";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611160928";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -440,7 +440,7 @@ async function avisarDeportista(a, titulo, texto) {
 async function publicar(a) {
   if (!a.ntfy) { a.ntfy = nuevoCanal("dnj-"); try { await A.guardarFicha(a); } catch (e) { } }
   if (!A.nube || !a) return;
-  await asegurarSemanas(a);
+  await asegurarSemanas(a, lunesDe(hoy()), semanasPlan(a)); // todo el plan (el deportista solo ve fases y volumen del futuro)
   const semanas = {}, l0 = lunesDe(hoy());
   for (const l of [l0, sumaDias(l0, 7)]) if (a.semanas[l]) semanas[l] = a.semanas[l]; // el deportista ve esta semana y la siguiente
   const Z = calcZonas(a);
@@ -462,7 +462,12 @@ async function publicar(a) {
         .map(({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det }) => ({ fecha, dep, km, dur, fcMed, fcMax, potMed, titulo, fuente, sube, kcal, cad, mov, mejores, det })),
       mujer: a.sexo === "m",
       zonas: { fcmax: Z.fcmax, fcrep: Z.fcrep, fc: Z.fc, ritmos: Z.ritmos, potencia: Z.potencia, nado: Z.nado, carrera: Z.carrera, metodo: Z.metodo, tipos: Z.tipos, vdot: Z.vdot, ritmoEstimado: Z.ritmoEstimado, ritmosPropios: Z.ritmosPropios },
-      semanas
+      semanas,
+      // historial (semanas pasadas, en corto) y esquema del plan futuro (solo fases y volumen: nunca las sesiones)
+      hist: Object.keys(a.semanas || {}).filter(l => l < l0).sort().slice(-52).map(l => { const sn = a.semanas[l]; return { lunes: l, fase: sn.fase?.n || "", fk: sn.fase?.clave || "", total: sn.total || 0,
+        dias: sn.dias.map(d => d.ses.filter(x => x.dep !== "movilidad").map(x => ({ id: x.id, t: x.t, c: claseTipo(x), min: x.min, dep: x.dep }))) }; }),
+      planF: Array.from({ length: semanasPlan(a) }, (_, i) => sumaDias(l0, 7 * i)).map(l => { const sn = a.semanas[l]; return sn ? { lunes: l, fase: sn.fase?.n || "", fk: sn.fase?.clave || "", total: sn.total || 0 } : { lunes: l }; }),
+      inicio: a.inicio || ""
     });
     estadoEnlace(a, true);
   } catch (e) { console.error(e); estadoEnlace(a, false, e.code || e.message); toast("Guardado, pero no se ha podido actualizar su enlace: " + (e.code || e.message)); }
