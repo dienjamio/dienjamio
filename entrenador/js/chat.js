@@ -1,6 +1,6 @@
 /* Chat entrenador ↔ deportista. Cada mensaje es un aporte { tipo: "mensaje", de, texto, t, ref? }.
    - visto: el entrenador ha leído un mensaje del deportista · leido: el deportista ha leído uno del entrenador. */
-import { esc, fechaCorta, hoy } from "./util.js?v=202611170543";
+import { esc, fechaCorta, hoy } from "./util.js?v=202611170654";
 
 export const mensajes = aportes => (aportes || []).filter(x => x.tipo === "mensaje").sort((a, b) => (a.t || a.cuando || "").localeCompare(b.t || b.cuando || ""));
 export const sinLeerDep = aportes => mensajes(aportes).filter(m => m.de === "entrenador" && !m.leido);

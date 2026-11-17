@@ -2,7 +2,7 @@
    - Carga de cada entreno: TRIMP de Banister si hay pulso; si no, RPE × minutos; si no, minutos × intensidad del tipo.
    - Forma (CTL) = media exponencial de 42 días · Fatiga (ATL) = 7 días · Frescura (TSB) = forma − fatiga.
    - Ratio agudo:crónico (fatiga / forma): por encima de 1,5 la carga sube demasiado rápido (más riesgo de lesión). */
-import { hoy, sumaDias, diasEntre } from "./util.js?v=202611170543";
+import { hoy, sumaDias, diasEntre } from "./util.js?v=202611170654";
 
 const num = x => parseFloat(String(x ?? "").replace(",", ".")) || 0;
 const segs = t => { const p = String(t || "").trim().split(":").map(Number); if (!t || p.some(isNaN)) return 0; return p.length === 1 ? p[0] * 60 : p.reduce((a, b) => a * 60 + b, 0); };

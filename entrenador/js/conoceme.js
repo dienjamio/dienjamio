@@ -1,6 +1,6 @@
 /* Página pública de presentación del entrenador */
-import { $, esc } from "./util.js?v=202611170543";
-import { leerPublico } from "./almacen.js?v=202611170543";
+import { $, esc } from "./util.js?v=202611170654";
+import { leerPublico } from "./almacen.js?v=202611170654";
 
 const QUE = [
   ["📅", "Tu semana de entrenos", "Hecha a tu medida: tus días, tu tiempo de cada día y tus carreras. Sin entrenos imposibles."],

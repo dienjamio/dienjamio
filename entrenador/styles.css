@@ -946,3 +946,27 @@ body.sin-cinta .pr-v{grid-template-columns:repeat(2,minmax(0,1fr))}
 .pr-grid b{color:var(--accent);font-variant-numeric:tabular-nums}
 .version-pie{text-align:center;font-size:11px;color:var(--ink3);padding:6px 0 96px;opacity:.7}
 .version-nueva{position:fixed;left:12px;right:12px;top:10px;z-index:100;border:0;border-radius:12px;padding:12px 14px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:800;font-size:14.5px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+
+/* v17 · Lo hecho en lugar de lo planificado */
+.hecho{background:var(--paper);border-radius:14px;padding:12px;margin:8px 0 10px}
+.hecho-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.hecho-ok{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:3px 11px;font-weight:800;font-size:13px}
+.hecho-s{font-size:12.5px;color:var(--ink2);font-weight:600}
+.hecho-tiles{grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.hecho-tiles .tile{background:var(--card);padding:8px 10px}
+.hecho-tiles .tile .v{font-size:21px;white-space:nowrap}
+.vs{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--card)}
+.vs-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.vs-t{font-family:var(--font-display);font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
+.vs .chip.ok{background:var(--good-soft);color:var(--good)}.vs .chip.ojo{background:var(--warn-soft);color:var(--warn)}.vs .chip.mal{background:var(--crit-soft);color:#FF9AAE}
+.vs-r{display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:8px;row-gap:1px;padding:7px 0;border-top:1px solid var(--line)}
+.vs-r:first-child{border-top:0}
+.vs-i{grid-row:span 2;font-weight:900;text-align:center;padding-top:1px}
+.vs-bien .vs-i{color:var(--good)}.vs-mal .vs-i{color:var(--warn)}
+.vs-n{display:flex;justify-content:space-between;align-items:baseline;gap:4px 10px;flex-wrap:wrap}
+.vs-n b{font-size:14px}.vs-n span{font-size:12.5px;color:var(--ink3)}
+.vs-v{font-size:13.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.vs-v em{font-style:normal;color:var(--warn);font-weight:700;margin-left:6px}
+details.tocaba{margin:4px 0}
+details.tocaba>summary{cursor:pointer;font-size:13.5px;font-weight:700;color:var(--ink2);padding:4px 0}
+@media (max-width:380px){.hecho-tiles{grid-template-columns:repeat(2,1fr)}}

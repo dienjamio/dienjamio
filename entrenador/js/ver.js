@@ -1,18 +1,18 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { comprobarVersion, $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611170543";
-import { claseTipo, tipoDia, NOM_TIPO, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611170543";
-import { leerArchivo, fusionar } from "./importar.js?v=202611170543";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611170543";
-import { PRUEBAS, CARGA_TXT, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170543";
-import { leerCaptura } from "./captura.js?v=202611170543";
-import { htmlReloj, textoPasos, MARCAS } from "./reloj.js?v=202611170543";
-import { avisar, htmlSuscribir } from "./avisos.js?v=202611170543";
-import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611170543";
-import { htmlPrediccion } from "./prediccion.js?v=202611170543";
-import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611170543";
-import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611170543";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611170543";
+import { comprobarVersion, $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611170654";
+import { emparejar, claseTipo, tipoDia, NOM_TIPO, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611170654";
+import { leerArchivo, fusionar } from "./importar.js?v=202611170654";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611170654";
+import { PRUEBAS, CARGA_TXT, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170654";
+import { leerCaptura } from "./captura.js?v=202611170654";
+import { htmlReloj, textoPasos, MARCAS } from "./reloj.js?v=202611170654";
+import { avisar, htmlSuscribir } from "./avisos.js?v=202611170654";
+import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611170654";
+import { htmlPrediccion } from "./prediccion.js?v=202611170654";
+import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611170654";
+import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611170654";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611170654";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -159,7 +159,7 @@ function pintar() {
       if (d.ses.some(x => ["run", "bike"].includes(x.dep))) html += `<div id="tiempo-hoy">${geoGuardada() ? `<p class="small muted">Cargando el tiempo…</p>` : `<button class="btn sec mini" data-acc="ver-tiempo">📍 Ver el tiempo y la mejor hora para entrenar</button>`}</div>`;
       html += "<!--extra-->" + racha;
       html += `<article class="dia hoy"><div class="dia-cab"><h3>Entreno</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
-        ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true, abierto: s.dep !== "movilidad" })).join("") + actividades().filter(a => a.fecha === h).map(a => `<div class="reloj"><button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button></div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
+        ${d.ses.length ? d.ses.map(s => htmlSesion(s, false, { regs, registrar: true, abierto: s.dep !== "movilidad", actMap: emparejar(d.ses, actividades().filter(a => a.fecha === h)).mapa })).join("") + emparejar(d.ses, actividades().filter(a => a.fecha === h)).sueltas.map(a => `<div class="reloj"><button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button></div>`).join("") : `<div class="ses descanso"><div class="ses-cab"><h4>😴 Hoy toca descansar</h4></div><div class="nota">Duerme bien, hidrátate y, si apetece, un paseo suave.</div></div>`}</article>`;
       // entrenos de días anteriores sin registrar
       const sin = sh.dias.slice(0, i).flatMap((dd, k) => dd.ses.filter(s => s.dep !== "movilidad" && !regs[s.id]).map(s => ({ s, k })));
       if (sin.length) html += `<div class="pendientes"><b>Sin registrar esta semana:</b> ${sin.map(x => `<button class="link" data-acc="registrar" data-id="${x.s.id}">${DIAS[x.k]} · ${esc(x.s.t)}</button>`).join(" · ")}</div>`;
@@ -757,6 +757,7 @@ function enlazarDialogos() {
   $("#reg-foto-in").addEventListener("change", async e => {
     const files = [...e.target.files].slice(0, Math.max(0, 8 - fotos.length)); e.target.value = "";
     if (!files.length) return toast("Máximo 8 fotos por entreno");
+    const base = fotos.length;
     for (const f of files) {
       try { fotos.push({ full: await comprimirImagen(f, 1600, 0.8), thumb: await comprimirImagen(f, 260, 0.6) }); pintarFotos(); }
       catch (err) { toast(err.message); }
@@ -764,10 +765,11 @@ function enlazarDialogos() {
     // si es una captura de Strava, Garmin, Polar…, se leen sus datos y se rellenan solos
     if (regAct === undefined && regSes) {
       $("#reg-act").innerHTML = "📖 Leyendo tu captura…";
-      for (const f of files) {
+      for (const [k, f] of files.entries()) {
         try {
           const d = await leerCaptura(f);
           if (!d.dur && !d.km) continue;
+          fotos.splice(base + k, 1); pintarFotos(); // leída: se guardan los datos, no la imagen
           const fr = $("#f-reg");
           if (d.km && !fr.elements.km.value) fr.elements.km.value = String(d.km).replace(".", ",");
           if (d.dur && !fr.elements.tiempo.value) fr.elements.tiempo.value = fmtT(d.dur);

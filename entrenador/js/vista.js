@@ -1,8 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611170543";
-import { htmlDetalle } from "./detalle.js?v=202611170543";
-import { infoEjercicio } from "./biblioteca.js?v=202611170543";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170543";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611170654";
+import { htmlDetalle } from "./detalle.js?v=202611170654";
+import { infoEjercicio } from "./biblioteca.js?v=202611170654";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170654";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -28,6 +28,67 @@ export function htmlComparativa(s, r) {
   return p.length ? `<div class="comparativa">${p.map(x => `<div>${x}</div>`).join("")}</div>` : "";
 }
 
+/* ---------- Lo que tocaba y lo que hizo ---------- */
+/** Lo previsto de una sesión: minutos, km aproximados y ritmo medio previsto (s/km). */
+function previsto(s) {
+  const med = r => (r[0] + r[1]) / 2;
+  let min = +s.min || 0, km = null;
+  if (s.dep === "run" && s.tr?.length) {
+    km = 0; min = 0;
+    const uno = t => { const m = t.min || (t.r ? t.m / 1000 * med(t.r) / 60 : (t.m || 0) / 1000 * 6); const k = t.m ? t.m / 1000 : t.k === "andar" ? m / 12 : t.r ? m * 60 / med(t.r) : m * 60 / 400; return [m, k]; };
+    for (const t of s.tr) {
+      const [m, k] = uno(t), n = t.n || 1;
+      min += m * n; km += k * n;
+      if (t.par) { const [pm, pk] = uno(t.par); min += pm * n; km += pk * n; }
+      if (t.rec && t.n) { min += t.rec * (t.n - 1); km += (t.rr ? t.rec * 60 / med(t.rr) : t.rec / 7) * (t.n - 1); }
+    }
+  } else if (s.dep === "run" && s.obj?.ritmo) km = min * 60 / med(s.obj.ritmo);
+  return { min: Math.round(min), km: km ? Math.round(km * 10) / 10 : null, ritmo: km ? min * 60 / km : null };
+}
+/** Asigna las actividades de un día a sus sesiones (mismo deporte). Devuelve { mapa: {sesId: act}, sueltas: [act] }. */
+export function emparejar(ses, acts) {
+  const mapa = {}, libres = acts.slice();
+  for (const x of ses.filter(y => y.dep !== "movilidad")) {
+    const i = libres.findIndex(a => a.dep === x.dep);
+    if (i >= 0) mapa[x.id] = libres.splice(i, 1)[0];
+  }
+  return { mapa, sueltas: libres };
+}
+/** Bloque «hecho»: datos reales + comparación con lo previsto. d: { km, dur, fcMed, fcMax, sube, kcal, fuente } */
+export function htmlHecho(s, d, quien = "hizo") {
+  if (!d || !(d.dur || d.km)) return "";
+  const P = previsto(s), km = +d.km || 0, dur = +d.dur || 0, real = km > 0.3 && dur ? dur / km : null;
+  const t = (l, v) => v ? `<div class="tile"><span class="l">${l}</span><span class="v">${v}</span></div>` : "";
+  const filas = [];
+  const fila = (nombre, toc, hec, ok, extra = "") => filas.push(`<div class="vs-r ${ok ? "vs-bien" : "vs-mal"}"><span class="vs-i">${ok ? "✓" : "!"}</span><div class="vs-n"><b>${nombre}</b><span>tocaba ${toc}</span></div><div class="vs-v">${quien} ${hec}${extra ? `<em>${extra}</em>` : ""}</div></div>`);
+  let rapido = false, lento = false, corto = false, largo = false;
+  if (dur && P.min) { const m = dur / 60, df = m - P.min, ok = Math.abs(df) <= Math.max(5, P.min * 0.15); if (!ok) (df < 0 ? (corto = true) : (largo = true)); fila("Duración", fmtMin(P.min), fmtHoras(dur), ok, ok ? "" : `${df > 0 ? "+" : "−"}${Math.abs(Math.round(df))}'`); }
+  if (km && P.km) { const df = km - P.km, ok = Math.abs(df) <= Math.max(0.7, P.km * 0.15); fila("Distancia", `~${String(P.km).replace(".", ",")} km`, `${String(Math.round(km * 100) / 100).replace(".", ",")} km`, ok, ok ? "" : `${df > 0 ? "+" : "−"}${String(Math.abs(Math.round(df * 10) / 10)).replace(".", ",")} km`); }
+  if (real && s.dep === "run") {
+    if (s.obj?.ritmo && !s.tr?.some(x => x.n)) {
+      const [ra, le] = s.obj.ritmo, ok = real >= ra - 5 && real <= le + 5;
+      if (!ok) (real < ra ? (rapido = true) : (lento = true));
+      fila("Ritmo", `${fmtRitmo(ra)}-${fmtRitmo(le)} /km`, `${fmtRitmo(real)} /km`, ok, ok ? "" : real < ra ? `${Math.round(ra - real)}" más rápido` : `${Math.round(real - le)}" más lento`);
+    } else if (P.ritmo) {
+      const ok = Math.abs(real - P.ritmo) <= 12;
+      if (!ok) (real < P.ritmo ? (rapido = true) : (lento = true));
+      fila("Ritmo medio", `~${fmtRitmo(P.ritmo)} /km (con calentamiento y recuperaciones)`, `${fmtRitmo(real)} /km`, ok, ok ? "" : real < P.ritmo ? `${Math.round(P.ritmo - real)}" más rápido` : `${Math.round(real - P.ritmo)}" más lento`);
+    }
+  }
+  if (d.fcMed && s.obj?.fc) { const [lo, hi] = s.obj.fc, ok = d.fcMed >= lo - 4 && d.fcMed <= hi + 4; fila("Pulso", `${lo}-${hi} ppm (Z${s.obj.zona})`, `${d.fcMed} ppm`, ok, ok ? "" : d.fcMed > hi ? `${d.fcMed - hi} por encima` : `${lo - d.fcMed} por debajo`); }
+  const mal = filas.filter(f => f.includes("vs-mal")).length;
+  const suave = ["suave", "recuperacion", "largo"].includes(s.tipo);
+  const ver = !filas.length ? "" : !mal ? ["ok", "Como estaba previsto"] : rapido && suave ? ["mal", "Más rápido de lo previsto: era un día suave"] : rapido ? ["ojo", "Más rápido de lo previsto"] : lento ? ["ojo", "Más lento de lo previsto"] : corto ? ["ojo", "Más corto de lo previsto"] : largo ? ["ojo", "Más largo de lo previsto"] : ["ojo", "Con diferencias"];
+  return `<div class="hecho">
+    <div class="hecho-h"><span class="hecho-ok">✓ Hecho</span>${d.fuente ? `<span class="hecho-s">${esc(d.fuente)}</span>` : ""}${d.sube && s.dep === "run" && d.sube / Math.max(km, 1) > 12 ? `<span class="hecho-s">⛰️ con desnivel: el ritmo sale más lento</span>` : ""}</div>
+    <div class="tiles hecho-tiles">${t("Distancia", km ? `${String(Math.round(km * 100) / 100).replace(".", ",")} km` : "")}${t("Tiempo", dur ? fmtHoras(dur) : "")}${t("Ritmo", real && s.dep === "run" ? `${fmtRitmo(real)} /km` : "")}${t("Pulso medio", d.fcMed ? `${d.fcMed} ppm` : "")}${t("Desnivel", d.sube ? `+${d.sube} m` : "")}${t("Calorías", d.kcal ? `${d.kcal} kcal` : "")}</div>
+    ${filas.length ? `<div class="vs"><div class="vs-h"><span class="vs-t">Lo que tocaba y lo que ${quien}</span><span class="chip ${ver[0]}">${ver[1]}</span></div><div class="vs-l">${filas.join("")}</div></div>` : ""}
+  </div>`;
+}
+/** Datos de lo hecho a partir de un registro del deportista (con o sin archivo/captura). */
+const hechoDeReg = r => !r || r.hecho === "no" ? null : r.act ? { ...r.act, fuente: r.act.fuente || "" }
+  : { km: parseFloat(String(r.km || "").replace(",", ".")) || 0, dur: r.tiempo ? String(r.tiempo).split(/[:.,]/).reduce((t, x) => t * 60 + (+x || 0), 0) : 0, fcMed: +r.fc || null };
+
 export function htmlRegistro(r, s = null) {
   if (!r) return "";
   const e = ESTADO[r.hecho] || ESTADO.si;
@@ -35,8 +96,7 @@ export function htmlRegistro(r, s = null) {
   return `<div class="registro ${esc(r.hecho || "si")}">
     <div class="reg-cab"><b>${e[0]} ${e[1]}</b>${datos ? `<span>${datos}</span>` : ""}</div>
     ${r.texto ? `<p>“${esc(r.texto)}”</p>` : ""}
-    ${r.act ? `<div class="act-l">⌚ ${htmlDatosAct(r.act)}</div>` : ""}
-    ${htmlComparativa(s, r)}
+    ${s && htmlHecho(s, hechoDeReg(r)) ? "" : `${r.act ? `<div class="act-l">⌚ ${htmlDatosAct(r.act)}</div>` : ""}${htmlComparativa(s, r)}`}
     ${(r.thumbs?.length || r.img) ? `<div class="fotos-reg">${r.img ? `<button class="miniatura" data-acc="ver-img"><img src="${r.img}" alt="Captura del entreno"></button>` : ""}${(r.thumbs || []).map((t, i) => `<button class="miniatura" data-acc="ver-foto" data-f="${esc(r.fotos?.[i] || "")}"><img src="${t}" alt="Captura ${i + 1}"></button>`).join("")}</div>` : ""}
   </div>`;
 }
@@ -113,6 +173,9 @@ export function htmlEstructura(s) {
 export function htmlSesion(s, ed = false, op = {}) {
   const d = DEP[s.dep] || DEP.run;
   const reg = op.regs?.[s.id];
+  const act = op.actMap?.[s.id] || null;
+  const quien = op.registrar ? "hiciste" : "hizo";
+  const hecho = htmlHecho(s, hechoDeReg(reg) && (hechoDeReg(reg).dur || hechoDeReg(reg).km) ? hechoDeReg(reg) : act ? { ...act, fuente: act.fuente && act.fuente !== "A mano" ? act.fuente : "" } : null, quien);
   const ej = s.ej && s.ej.length ? `<table class="ej">${s.ej.map(e => `<tr><td><button class="ej-n" data-acc="ejercicio" data-n="${esc(e.n)}">${esc(e.n)} <span aria-hidden="true">ⓘ</span></button></td><td>${esc(e.s)}</td></tr>`).join("")}</table>` : "";
   return `<div class="ses ${esc(s.dep)} t-${claseTipo(s)}${s.tipo === "competicion" ? " comp" : ""}">
     <div class="ses-cab">
@@ -120,11 +183,14 @@ export function htmlSesion(s, ed = false, op = {}) {
       <span class="dur">${fmtMin(s.min)}</span>
     </div>
     ${s.z ? `<div class="zona">${esc(d.n)} · ${esc(s.z)}</div>` : ""}
+    ${hecho}
+    ${hecho ? `<details class="tocaba"><summary>Ver lo que tocaba</summary>` : ""}
     ${htmlEstructura(s)}
     ${s.p && s.p.length ? `<ol>${s.p.map(p => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
     ${ej}
     ${s.n ? `<div class="nota">${esc(s.n)}</div>` : ""}
-    ${htmlDetalle(s, op.abierto)}
+    ${htmlDetalle(s, op.abierto && !hecho)}
+    ${hecho ? `</details>` : ""}
     ${htmlRegistro(reg, s)}
     ${op.registrar && reg?.visto ? `<div class="visto-ent">👀 Tu entrenador ha revisado este entreno</div>` : ""}
     ${s.coment ? `<div class="coment">💬 <b>Tu entrenador:</b> ${esc(s.coment)}</div>` : ""}
@@ -139,12 +205,13 @@ export function htmlDia(snap, i, ed = false, op = {}) {
   const fecha = sumaDias(snap.lunes, i);
   const hechas = (op.acts || []).filter(a => a.fecha === fecha && ["run", "bike", "swim", "fuerza"].includes(a.dep));
   const esHoy = fecha === hoy();
-  const ses = d.ses.length ? d.ses.map(s => htmlSesion(s, ed, op)).join("") :
+  const { mapa, sueltas } = emparejar(d.ses, hechas);
+  const ses = d.ses.length ? d.ses.map(s => htmlSesion(s, ed, { ...op, actMap: mapa })).join("") :
     `<div class="ses descanso"><div class="ses-cab"><h4>😴 Descanso</h4></div><div class="nota">Recuperar también es entrenar: dormir bien, hidratarse y, si apetece, un paseo suave.</div></div>`;
   return `<article class="dia${esHoy ? " hoy" : ""}" id="dia-${i}">
     <div class="dia-cab"><h3>${DIAS[i]} <span class="fecha">${fechaCorta(fecha)}</span>${esHoy ? ' <span class="badge-hoy">Hoy</span>' : ""}</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
     ${ses}
-    ${hechas.length ? `<div class="reloj">${hechas.map(a => `<button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${ICO[a.dep] || ""} ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button>`).join("")}</div>` : ""}
+    ${sueltas.length ? `<div class="reloj">${sueltas.map(a => `<button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${ICO[a.dep] || ""} ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button>`).join("")}</div>` : ""}
     ${ed ? `<div class="fila"><button class="btn add mini" data-acc="add-ses" data-dia="${i}">＋ Añadir sesión</button>${fecha <= hoy() ? `<button class="btn add mini" data-acc="add-act" data-f="${fecha}">⌚ Añadir lo que hizo (captura)</button>` : ""}</div>` : ""}
   </article>`;
 }

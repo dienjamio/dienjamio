@@ -1,20 +1,20 @@
 /* App del entrenador */
-import { comprobarVersion, $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611170543";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611170543";
-import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611170543";
-import { BIBLIO } from "./biblioteca.js?v=202611170543";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611170543";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611170543";
-import { leerCaptura } from "./captura.js?v=202611170543";
-import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611170543";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611170543";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611170543";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611170543";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611170543";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611170543";
-import { calcProgreso } from "./progreso.js?v=202611170543";
-import * as A from "./almacen.js?v=202611170543";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611170543";
+import { comprobarVersion, $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611170654";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611170654";
+import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611170654";
+import { BIBLIO } from "./biblioteca.js?v=202611170654";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611170654";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611170654";
+import { leerCaptura } from "./captura.js?v=202611170654";
+import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611170654";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611170654";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611170654";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611170654";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611170654";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611170654";
+import { calcProgreso } from "./progreso.js?v=202611170654";
+import * as A from "./almacen.js?v=202611170654";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611170654";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
