@@ -1,19 +1,19 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611161051";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611161051";
-import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611161051";
-import { BIBLIO } from "./biblioteca.js?v=202611161051";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611161051";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611161051";
-import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611161051";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611161051";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611161051";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611161051";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611161051";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611161051";
-import { calcProgreso } from "./progreso.js?v=202611161051";
-import * as A from "./almacen.js?v=202611161051";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611161051";
+import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611170534";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611170534";
+import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611170534";
+import { BIBLIO } from "./biblioteca.js?v=202611170534";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611170534";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611170534";
+import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611170534";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611170534";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611170534";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611170534";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611170534";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611170534";
+import { calcProgreso } from "./progreso.js?v=202611170534";
+import * as A from "./almacen.js?v=202611170534";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611170534";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -570,6 +570,7 @@ function pintarAtleta() {
       <button class="icon-btn" data-acc="sem-sig" aria-label="Semana siguiente">›</button>
       <div class="wn-acc">
         <button class="btn sec mini" data-acc="hoy">Hoy</button>
+        <button class="btn pri mini" data-acc="add-act">＋ Actividad hecha</button>
         <button class="btn sec mini" data-acc="rehacer">↻ Rehacer semana</button>
         <button class="btn sec mini" data-acc="imprimir">🖨️ PDF</button>
         <button class="btn sec mini" data-acc="msg-semana">💬 Mensaje${claveClaude() ? " / 🤖 Análisis" : ""}</button>
@@ -588,7 +589,7 @@ function pintarAtleta() {
       : snap.dias.map((_, i) => htmlMenuDia(snap, i, true)).join("") + `<p class="aviso">Menú orientativo calculado según la carga de cada día. No sustituye a un dietista-nutricionista.</p>`;
   } else if (sub === "carreras") pintarCarreras();
   else if (sub === "plan") pintarPlan();
-  else if (sub === "progreso") el.innerHTML = `<div class="fila inf-bot"><button class="btn pri mini" data-acc="informe">📄 Informe del mes (PDF)</button></div>` + htmlPrediccion(predDe(a), calcZonas(a), prox, true) + htmlCarga(cargaDe(a)) + htmlBienTrainer(a) + htmlZapasTrainer(a) + htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }))
+  else if (sub === "progreso") el.innerHTML = `<div class="fila inf-bot"><button class="btn sec mini" data-acc="add-act">＋ Actividad hecha</button><button class="btn pri mini" data-acc="informe">📄 Informe del mes (PDF)</button></div>` + htmlPrediccion(predDe(a), calcZonas(a), prox, true) + htmlCarga(cargaDe(a)) + htmlBienTrainer(a) + htmlZapasTrainer(a) + htmlProgreso(calcProgreso({ semanas: a.semanas, aportes: a._aportes || [], actividades: a.actividades || [] }))
     + (htmlActividades((a.actividades || []).filter(x => x.fecha >= sumaDias(hoy(), -84) && ["run", "bike", "swim", "fuerza"].includes(x.dep)), "Sus actividades (12 semanas)") || `<p class="muted small">Sin actividades: súbelas en «Datos» o pídele que suba el archivo de su reloj al registrar cada entreno.</p>`);
   else if (sub === "datos") pintarDatos();
   else if (sub === "chat") pintarChat();
@@ -753,6 +754,60 @@ async function aplicarAcciones(a, acciones) {
   if (a._rehacerFuturas) { delete a._rehacerFuturas; await actualizarFuturas(a); for (const l of [lunesDe(hoy()), sumaDias(lunesDe(hoy()), 7)]) if (a.semanas[l]) { refrescarRitmos(a, a.semanas[l]); await A.guardarSemana(a, a.semanas[l]); } }
   await publicar(a);
   return hecho;
+}
+
+/* ---------------- Añadir a mano (o desde una captura) una actividad hecha ---------------- */
+function dialogoActividad(a) {
+  dialogo(`<h3>＋ Actividad hecha</h3>
+    <p class="small">Sube la captura de Strava, Garmin o Polar y ${claveClaude() ? "Claude rellena los datos" : "rellena los datos (con tu clave de Claude se rellenan solos)"}. Revisa y guarda.</p>
+    <label class="btn sec" style="width:100%;justify-content:center">📷 Leer una captura<input type="file" id="act-img" accept="image/*" hidden></label>
+    <div id="act-msg" class="small"></div>
+    <div class="g2">
+      <label>Día<input type="date" id="act-fecha" value="${hoy()}" max="${hoy()}"></label>
+      <label>Deporte<select id="act-dep"><option value="run">🏃 Carrera</option><option value="bike">🚴 Bici</option><option value="swim">🏊 Natación</option><option value="fuerza">🏋️ Fuerza</option></select></label>
+      <label>Distancia (km)<input id="act-km" inputmode="decimal" placeholder="9,50"></label>
+      <label>Tiempo<input id="act-t" placeholder="54:23"></label>
+      <label>Pulso medio<input id="act-fc" inputmode="numeric" placeholder="151"></label>
+      <label>Pulso máximo<input id="act-fcx" inputmode="numeric" placeholder=""></label>
+      <label>Desnivel + (m)<input id="act-sube" inputmode="numeric" placeholder="156"></label>
+      <label>Calorías<input id="act-kcal" inputmode="numeric" placeholder="759"></label>
+    </div>
+    <label>Título<input id="act-tit" placeholder="Rodaje por el monte"></label>
+    <div id="act-ritmo" class="small muted"></div>
+    <div class="fila"><button class="btn sec" data-acc="cerrar-dlg">Cancelar</button><button class="btn pri" data-acc="guardar-act">Guardar actividad</button></div>`);
+  const ritmo = () => { const km = parseFloat($("#act-km").value.replace(",", ".")), t = parseTiempo($("#act-t").value); $("#act-ritmo").textContent = km > 0 && t ? `Ritmo medio: ${fmtRitmo(t / km)} /km` : ""; };
+  $("#act-km").addEventListener("input", ritmo); $("#act-t").addEventListener("input", ritmo);
+  $("#act-img").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    if (!claveClaude()) { $("#act-msg").innerHTML = `<span class="alerta">Para leer capturas pon tu clave de Claude en Herramientas → Claude. Mientras, rellena los datos a mano.</span>`; return; }
+    $("#act-msg").textContent = "🤖 Leyendo la captura…";
+    try {
+      const img = await comprimirImagen(f, 1400, 0.85);
+      const txt = await analizar(`Lee esta captura de una actividad deportiva y devuelve SOLO un objeto JSON (sin texto alrededor) con estas claves, usando null si un dato no aparece: {"deporte": "run"|"bike"|"swim"|"fuerza", "km": número, "tiempo": "h:mm:ss o mm:ss (tiempo en movimiento si aparece)", "fc_media": número, "fc_max": número, "desnivel": número en metros, "kcal": número, "fecha": "AAAA-MM-DD si aparece", "titulo": "si aparece"}. No inventes datos.`, "Captura de la actividad:", [img]);
+      const j = JSON.parse((/\{[\s\S]*\}/.exec(txt) || ["{}"])[0]);
+      if (j.deporte) $("#act-dep").value = j.deporte;
+      if (j.km != null) $("#act-km").value = String(j.km).replace(".", ",");
+      if (j.tiempo) $("#act-t").value = j.tiempo;
+      if (j.fc_media) $("#act-fc").value = j.fc_media; if (j.fc_max) $("#act-fcx").value = j.fc_max;
+      if (j.desnivel != null) $("#act-sube").value = j.desnivel; if (j.kcal) $("#act-kcal").value = j.kcal;
+      if (j.fecha && /^\d{4}-\d\d-\d\d$/.test(j.fecha) && j.fecha <= hoy()) $("#act-fecha").value = j.fecha;
+      if (j.titulo) $("#act-tit").value = j.titulo;
+      ritmo(); $("#act-msg").textContent = "✅ Datos leídos: revísalos (sobre todo el día) y guarda.";
+    } catch (err) { $("#act-msg").innerHTML = `<span class="alerta">No he podido leer la captura (${esc(err.message)}). Rellena los datos a mano.</span>`; }
+  });
+}
+async function guardarActividad(a) {
+  const km = parseFloat($("#act-km").value.replace(",", ".")) || 0, dur = parseTiempo($("#act-t").value), fecha = $("#act-fecha").value, dep = $("#act-dep").value;
+  if (!fecha || !dur) return toast("Faltan el día y el tiempo (por ejemplo 54:23).");
+  if (dep === "run" && km > 0 && (dur / km < 150 || dur / km > 900)) return toast("Ese ritmo no cuadra: revisa la distancia y el tiempo.");
+  const n = id => parseInt($(id).value, 10) || null;
+  const act = { id: "man-" + uid(8), fecha, dep, km: Math.round(km * 100) / 100, dur, mov: dur, fcMed: n("#act-fc"), fcMax: n("#act-fcx"), sube: n("#act-sube"), kcal: n("#act-kcal"), titulo: $("#act-tit").value.trim() || "", fuente: "A mano", mejores: {} };
+  const antes = (a.actividades || []).length;
+  anadirActividades(a, [act]);
+  await A.guardarFicha(a); await publicar(a);
+  $("#dlg-gen").close();
+  toast((a.actividades || []).length > antes ? `✅ Actividad del ${fechaCorta(fecha)} añadida` : "Ya había una actividad igual ese día: se han completado sus datos");
+  pintarLista(); pintarAtleta();
 }
 
 /* ---------------- Chat ---------------- */
@@ -1515,6 +1570,8 @@ function enlazar() {
     if (acc === "chat-enviar") return enviarMensaje(a);
     if (acc === "chat-recargar") { try { a._aportes = await A.listarAportes(a.token); } catch (e) { } return pintarChat(); }
     if (acc === "informe") return dialogoInforme(a);
+    if (acc === "add-act") return dialogoActividad(a);
+    if (acc === "guardar-act") return guardarActividad(a);
     if (acc === "asist-enviar") { const t_ = $("#asist-txt").value.trim(); return enviarAsistente(a, t_); }
     if (acc === "asist-ej") return enviarAsistente(a, t.textContent.trim());
     if (acc === "asist-borrar") { conversaciones[a.id] = []; return pintarAsistente(); }

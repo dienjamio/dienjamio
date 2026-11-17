@@ -1,6 +1,6 @@
 /* «Paso a paso» de cada entreno para el deportista: bloques con ritmo (calle y cinta), pulso, esfuerzo y km,
    para qué sirve, claves de técnica, comida, plan B y cómo ponerlo en el reloj. */
-import { esc, fmtRitmo } from "./util.js?v=202611161051";
+import { esc, fmtRitmo } from "./util.js?v=202611170534";
 
 const kmh = r => (3600 / ((r[0] + r[1]) / 2)).toFixed(1).replace(".", ",");
 const med = r => (r[0] + r[1]) / 2;

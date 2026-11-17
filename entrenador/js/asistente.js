@@ -1,7 +1,7 @@
 /* Asistente del entrenador: le pides cambios en lenguaje normal («Adrián esta semana solo puede lunes y martes:
    métele carrera esos dos días y quítale la fuerza») y propone acciones concretas que tú apruebas con un botón. */
-import { esc, hoy, lunesDe, sumaDias, DIAS, fmtRitmo, uid } from "./util.js?v=202611161051";
-import { asistente } from "./claude.js?v=202611161051";
+import { esc, hoy, lunesDe, sumaDias, DIAS, fmtRitmo, uid } from "./util.js?v=202611170534";
+import { asistente } from "./claude.js?v=202611170534";
 
 export const HERRAMIENTAS = [{
   name: "proponer_cambios",
