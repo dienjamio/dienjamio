@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pulso en grande</title>
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="El pulso del reloj, en grande en el móvil">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Figtree:wght@400;600;700;800&display=swap">
+<style>
+/* Pantalla de pulso para la cinta: el pulso del reloj (Garmin emitiendo por Bluetooth) a pantalla completa,
+   con el tiempo, el ritmo de la cinta y, si viene de DiEnjamio, el tramo del entreno. No guarda nada fuera del móvil. */
+:root{
+  --bg:#000;--card:#101012;--paper:#1A1A1E;--line:#26262B;--ink:#F4F5F0;--ink-2:#B9BBB5;--muted:#86888C;
+  --accent:#D7FF1F;--accent-ink:#0B0B0B;--series:#00E1FF;--warn:#FFB000;--crit:#FF4D6D;--rodaje:#3DFF8B;
+  --z1:#8A8D93;--z2:#00E1FF;--z3:#3DFF8B;--z4:#FFB000;--z5:#FF2E63;
+  --st:var(--muted);
+  --fd:"Big Shoulders Display","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --fb:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--fb);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button{font:inherit;color:inherit}
+#app{min-height:100%;min-height:100dvh;display:flex;flex-direction:column;padding:max(10px,env(safe-area-inset-top)) 16px max(14px,env(safe-area-inset-bottom));gap:10px;max-width:900px;margin:0 auto;
+  background:radial-gradient(120% 60% at 50% 22%,color-mix(in srgb,var(--st) 22%,transparent),transparent 70%)}
+.top{display:flex;align-items:center;gap:8px}
+.top h1{flex:1;min-width:0;margin:0;font-size:14px;font-weight:700;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:8px 12px;background:var(--paper);font-size:13px;font-weight:700;min-height:38px;cursor:pointer;white-space:nowrap}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.chip.on i{background:var(--accent);box-shadow:0 0 0 3px rgba(215,255,31,.25)}
+.chip.busca i{background:var(--warn);animation:lat 1s ease-in-out infinite}
+.ib{border:0;background:var(--paper);width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.ib svg{width:20px;height:20px}
+@keyframes lat{50%{opacity:.3}}
+
+/* El pulso */
+.fc{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1 1 auto;padding:2px 0;position:relative;z-index:0}
+.fc-n{font-family:var(--fd);font-weight:900;font-size:clamp(110px,min(50vw,27vh),300px);line-height:.86;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--st);text-shadow:0 0 50px color-mix(in srgb,var(--st) 45%,transparent);transition:color .3s}
+.fc-n.sin{color:var(--line);text-shadow:none}
+.fc-u{font-family:var(--fd);font-weight:800;font-size:18px;letter-spacing:.14em;color:var(--ink-2);margin-top:2px}
+.fc-e{margin-top:6px;font-family:var(--fd);font-weight:800;font-size:clamp(22px,7vw,32px);letter-spacing:.04em;text-transform:uppercase;color:var(--st)}
+.fc-s{font-size:14px;color:var(--ink-2);margin-top:2px;min-height:20px}
+.fc-x{display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.fc-x b{color:var(--ink-2)}
+.aviso{background:var(--paper);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45;color:var(--ink-2);text-align:left;max-width:520px}
+.aviso b{color:var(--ink)}
+.aviso ol{margin:6px 0 0;padding-left:20px}
+.aviso li{margin:3px 0}
+
+/* Datos */
+.datos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.dato{background:var(--card);border-radius:14px;padding:9px 10px;text-align:center;min-width:0;box-shadow:0 0 0 1px #1E1E23}
+.dato span{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.dato b{display:block;font-family:var(--fd);font-weight:900;font-size:clamp(26px,8.5vw,42px);line-height:1.05;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dato em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Tramo del entreno */
+.tramo{background:var(--card);border-radius:16px;padding:10px 12px;box-shadow:inset 0 0 0 1.5px var(--tc,var(--line))}
+.tr-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.tr-n{font-family:var(--fd);font-weight:800;font-size:22px;letter-spacing:.05em;text-transform:uppercase;color:var(--tc,var(--ink))}
+.tr-t{font-family:var(--fd);font-weight:900;font-size:40px;line-height:1;font-variant-numeric:tabular-nums}
+.tr-o{font-size:15px;font-weight:700;margin-top:2px}
+.tr-b{height:6px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:8px}.tr-b i{display:block;height:100%;background:var(--tc,var(--accent))}
+.tr-s{font-size:12.5px;color:var(--muted);margin-top:6px}
+.tr-s b{color:var(--ink-2)}
+
+/* Gráfico */
+.graf{position:relative;height:56px;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px #1E1E23}
+.graf canvas{display:block;width:100%;height:100%}
+.graf span{position:absolute;left:8px;top:5px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+
+/* Mandos */
+.mandos{display:grid;grid-template-columns:64px 1fr 64px;gap:10px;align-items:center}
+.sinreloj .fc-n,.sinreloj .fc-u,.sinreloj .fc-e,.sinreloj .fc-s,.sinreloj .fc-x{display:none}
+.lk{border:0;background:none;padding:2px 4px;color:var(--series);font-size:12.5px;font-weight:700;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.lk.on{color:var(--accent);text-decoration:none}
+.btn{border:0;border-radius:18px;min-height:60px;font-weight:800;font-size:19px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--paper)}
+.btn.pri{background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn svg{width:26px;height:26px}
+.vel{display:grid;grid-template-columns:64px 1fr 64px;gap:10px;align-items:center}
+.vel .v{text-align:center;font-size:13px;color:var(--ink-2);line-height:1.25}
+.vel .v b{display:block;font-family:var(--fd);font-weight:900;font-size:30px;color:var(--ink);line-height:1.05}
+.btn.peq{font-size:30px;font-family:var(--fd)}
+.mini{font-size:12.5px;color:var(--muted);text-align:center;margin:0}
+.oculto{display:none!important}
+.calle .datos{grid-template-columns:1fr}.calle .dato.cn,.calle #velBox{display:none}
+:focus-visible{outline:3px solid var(--series);outline-offset:2px}
+
+@media (orientation:landscape) and (max-height:560px){
+  #app{display:grid;grid-template-columns:1.15fr 1fr;grid-template-rows:auto 1fr auto;column-gap:16px;row-gap:8px}
+  .top{grid-column:1/-1}
+  .fc{grid-row:2/4}
+  .fc-n{font-size:clamp(120px,40vh,260px)}
+  .der{display:flex;flex-direction:column;gap:6px;grid-row:2/4;justify-content:center}
+  .graf{display:none}
+  .dato{padding:5px 8px}.dato b{font-size:28px}.dato em{display:none}
+  .tramo{padding:7px 10px}.tr-t{font-size:30px}.tr-n{font-size:18px}.tr-o{font-size:13.5px}.tr-s{margin-top:4px}
+  .btn{min-height:48px}.vel .v b{font-size:24px}.vel,.mandos{grid-template-columns:52px 1fr 52px}
+}
+@media (prefers-reduced-motion:reduce){.chip.busca i{animation:none}.fc-n{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <a class="ib" id="volver" href="https://claude.ai/artifact/LvGeruJa3M8ibwMCVNuSZZ" aria-label="Volver a DiEnjamio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <h1 id="titulo">Pulso en grande</h1>
+    <button class="chip" id="bt" type="button"><i></i><span>Conectar reloj</span></button>
+    <button class="ib" id="voz" type="button" aria-label="Quitar la voz" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="ond" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
+  </header>
+
+  <section class="fc sinreloj" id="fc" aria-live="off">
+    <div class="fc-n sin" id="fcN" role="img" aria-label="Pulso: sin datos">—</div>
+    <div class="fc-u">PPM</div>
+    <div class="fc-e" id="fcE">&nbsp;</div>
+    <div class="fc-s" id="fcS"></div>
+    <div class="fc-x" id="fcX"></div>
+    <div class="aviso oculto" id="ayuda"></div>
+  </section>
+
+  <div class="der">
+    <div class="datos">
+      <div class="dato"><span>Tiempo</span><b id="dT">0:00</b><em id="dT2">total</em></div>
+      <div class="dato cn"><span>Ritmo</span><b id="dR">—</b><em>min/km</em></div>
+      <div class="dato cn"><span>Distancia</span><b id="dD">0,00</b><em id="dD2">km (cinta)</em></div>
+    </div>
+
+    <section class="tramo oculto" id="tramo" aria-label="Tramo del entreno">
+      <div class="tr-h"><span class="tr-n" id="trN"></span><span class="tr-t" id="trT"></span></div>
+      <div class="tr-o" id="trO"></div>
+      <div class="tr-b"><i id="trB"></i></div>
+      <div class="tr-s" id="trS"></div>
+    </section>
+
+    <div class="graf"><span>Últimos 10 min</span><canvas id="graf" aria-hidden="true"></canvas></div>
+
+    <div class="vel" id="velBox">
+      <button class="btn peq" type="button" id="velMenos" aria-label="Bajar la velocidad 0,1">−</button>
+      <div class="v"><b id="velV">10,0</b><span id="velL">km/h de la cinta</span><br><button class="lk" type="button" id="cinta">Leerla de la cinta</button></div>
+      <button class="btn peq" type="button" id="velMas" aria-label="Subir la velocidad 0,1">+</button>
+    </div>
+
+    <div class="mandos">
+      <button class="btn" type="button" id="ant" aria-label="Tramo anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="btn pri" type="button" id="play">Empezar</button>
+      <button class="btn" type="button" id="sig" aria-label="Siguiente tramo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ---------- Datos que manda DiEnjamio en el enlace (después de #, no salen del móvil) ---------- */
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+const reloj=s=>{s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h?`${h}:${pad(m)}:${pad(x)}`:`${m}:${pad(x)}`;};
+const coma=(n,d)=>Number(n).toFixed(d).replace(".",",");
+const TIPO={warmup:"Calentamiento",interval:"Serie",recovery:"Recuperación",rest:"Descanso",cooldown:"Vuelta a la calma"};
+const TCOL={warmup:"var(--rodaje)",interval:"var(--accent)",recovery:"var(--series)",rest:"var(--series)",cooldown:"var(--rodaje)"};
+function leeEnlace(){
+  const q=new URLSearchParams(location.hash.slice(1));let d=null;
+  const raw=q.get("d");
+  if(raw){try{const b=atob(raw.replace(/-/g,"+").replace(/_/g,"/"));d=JSON.parse(decodeURIComponent(escape(b)));}catch(e){d=null;}}
+  const fm=Number(q.get("fm"))||Number(d&&d.fm)||210;
+  const pasos=(d&&Array.isArray(d.p)?d.p:[]).map(x=>({tipo:x[0]||"interval",seg:Number(x[1])||0,m:Number(x[2])||0,vel:Number(x[3])||null,ritmo:x[4]||null,fc:x[5]||null,nota:x[6]||"",rep:x[7]||null,reps:x[8]||null})).slice(0,200);
+  return {titulo:(d&&d.t)||"Pulso en grande",cinta:d?!!d.c:true,fm:fm>=150&&fm<=230?fm:210,pasos};
+}
+const E=leeEnlace();
+const rangoFc=r=>{const m=String(r||"").match(/(\d{2,3})\D+(\d{2,3})/);return m?[+m[1],+m[2]]:null;};
+const nombrePaso=p=>p.tipo==="interval"?(p.reps?`Serie ${p.rep} de ${p.reps}`:"Serie"):(TIPO[p.tipo]||"Tramo")+(p.tipo==="recovery"&&p.reps?` ${p.rep} de ${p.reps}`:"");
+
+/* ---------- Estado ---------- */
+const S={fc:null,fcT:0,hist:[],max:0,suma:0,n:0,
+  corre:false,acum:0,t0:0,i:0,tAcum:0,tT0:0,
+  vel:10,velReal:null,velRealT:0,dist:0,distReal:null,distReal0:null,ultT:0,
+  dev:null,devC:null,buscando:false,voz:true,avis:{}};
+try{S.voz=localStorage.getItem("pulso.voz")!=="0";const v=Number(localStorage.getItem("pulso.vel"));if(v>=3&&v<=20)S.vel=v;}catch(e){}
+const P=E.pasos,conPlan=P.length>0;
+if(conPlan&&P[0].vel)S.vel=P[0].vel;
+$("titulo").textContent=E.titulo;if(!E.cinta)$("app").classList.add("calle");document.title=E.titulo+" · pulso";
+
+/* ---------- Zonas y color del pulso ---------- */
+const ZON=[[.5,"Z1","Recuperación","var(--z1)"],[.6,"Z2","Rodaje suave","var(--z2)"],[.7,"Z3","Tempo","var(--z3)"],[.8,"Z4","Umbral","var(--z4)"],[.9,"Z5","Máximo","var(--z5)"]];
+function zona(fc){let z=ZON[0];for(const x of ZON)if(fc>=E.fm*x[0])z=x;return z;}
+function pasoAct(){return conPlan&&S.i<P.length?P[S.i]:null;}
+function estado(fc){
+  const p=pasoAct(),r=p?rangoFc(p.fc):null;
+  if(fc==null)return {col:"var(--muted)",txt:"",sub:""};
+  if(r){
+    if(fc>r[1])return {col:"var(--crit)",txt:"Baja: te pasas",sub:`Objetivo ${r[0]}–${r[1]} · ${fc-r[1]} por encima`};
+    if(fc>=r[1]-3)return {col:"var(--warn)",txt:"Arriba del todo",sub:`Objetivo ${r[0]}–${r[1]}`};
+    if(fc>=r[0])return {col:"var(--accent)",txt:"Bien",sub:`Objetivo ${r[0]}–${r[1]}`};
+    return {col:"var(--series)",txt:"Por debajo",sub:`Objetivo ${r[0]}–${r[1]}`};
+  }
+  const z=zona(fc);return {col:z[3],txt:`${z[1]} · ${z[2]}`,sub:`${Math.round(fc/E.fm*100)} % de tu máximo (${E.fm})`};
+}
+
+/* ---------- Bluetooth: pulso del reloj ---------- */
+const BT_OK=!!(navigator.bluetooth&&navigator.bluetooth.requestDevice);
+function ayuda(html){const a=$("ayuda");if(html){a.innerHTML=html;a.classList.remove("oculto");}else{a.classList.add("oculto");a.innerHTML="";}}
+function pintaBt(){
+  const b=$("bt"),on=!!(S.dev&&S.dev.gatt&&S.dev.gatt.connected&&S.fc!=null);
+  b.classList.toggle("on",on);b.classList.toggle("busca",S.buscando&&!on);
+  b.querySelector("span").textContent=on?(S.dev.name||"Reloj"):S.buscando?"Conectando…":S.dev?"Reconectar":"Conectar reloj";
+}
+const AYUDA_RELOJ=`<b>Primero, en el reloj</b> (con la actividad de cinta ya empezada o antes de empezar):<ol><li>Mantén pulsado el botón de la izquierda del medio (MENU) o abre los controles.</li><li>Toca <b>Emitir frecuencia cardiaca</b> (en algunos modelos: Sensores → Frecuencia cardiaca → Emitir FC).</li><li>Aquí, toca <b>Conectar reloj</b> y elige tu Forerunner en la lista.</li></ol>Si no sale en la lista, apaga y enciende el Bluetooth del móvil y vuelve a probar.`;
+async function conecta(){
+  if(!BT_OK){ayuda(`<b>Este navegador no puede leer el reloj.</b> Abre esta página en <b>Chrome</b> del móvil (no dentro de otra app). En iPhone no funciona.`);return;}
+  try{
+    S.buscando=true;pintaBt();
+    const dev=await navigator.bluetooth.requestDevice({filters:[{services:["heart_rate"]}],optionalServices:["battery_service"]});
+    S.dev=dev;$("fc").classList.remove("sinreloj");dev.addEventListener("gattserverdisconnected",()=>{S.fc=null;pinta();pintaBt();reconecta();});
+    await engancha();
+    ayuda("");
+  }catch(e){
+    S.buscando=false;pintaBt();
+    if(e&&e.name==="NotFoundError")ayuda(AYUDA_RELOJ);
+    else if(e&&e.name==="SecurityError")ayuda("<b>Aquí no deja usar el Bluetooth.</b> Abre la página directamente en Chrome.");
+    else ayuda(`No he podido conectar con el reloj (${(e&&e.message)||"error"}). Comprueba que está emitiendo el pulso y vuelve a tocar <b>Conectar reloj</b>.`);
+  }
+}
+async function engancha(){
+  S.buscando=true;pintaBt();
+  const srv=await S.dev.gatt.connect();
+  const ch=await (await srv.getPrimaryService("heart_rate")).getCharacteristic("heart_rate_measurement");
+  ch.addEventListener("characteristicvaluechanged",e=>{const v=e.target.value,f=v.getUint8(0),fc=f&1?v.getUint16(1,true):v.getUint8(1);if(fc>25&&fc<240)nuevoPulso(fc);});
+  await ch.startNotifications();
+  S.buscando=false;pintaBt();vibra(30);
+}
+let reTimer=0,reN=0;
+function reconecta(){
+  clearTimeout(reTimer);if(!S.dev)return;
+  if(reN>40){S.buscando=false;pintaBt();ayuda("Se ha perdido el reloj. Comprueba que sigue emitiendo el pulso y toca <b>Reconectar</b>.");return;}
+  S.buscando=true;pintaBt();
+  reTimer=setTimeout(async()=>{reN++;try{await engancha();reN=0;ayuda("");}catch(e){reconecta();}},Math.min(8000,1000+reN*500));
+}
+function nuevoPulso(fc){
+  const ahora=performance.now();S.fc=fc;S.fcT=ahora;
+  const t=Date.now();S.hist.push([t,fc]);while(S.hist.length&&S.hist[0][0]<t-600000)S.hist.shift();
+  if(S.corre){S.max=Math.max(S.max,fc);S.suma+=fc;S.n++;}
+  pintaFc();
+}
+$("bt").addEventListener("click",()=>{if(S.dev&&!S.dev.gatt.connected){reN=0;engancha().catch(()=>reconecta());}else if(!S.dev||!S.dev.gatt.connected)conecta();});
+
+/* ---------- Bluetooth: velocidad de la cinta (FTMS) o de un podómetro (RSC), opcional ---------- */
+async function conectaCinta(){
+  if(!BT_OK){ayuda("Este navegador no puede usar el Bluetooth: ábrela en Chrome.");return;}
+  const b=$("cinta");
+  try{
+    b.classList.add("busca");
+    const dev=await navigator.bluetooth.requestDevice({filters:[{services:["fitness_machine"]},{services:["running_speed_and_cadence"]}]});
+    const srv=await dev.gatt.connect();let ch=null,tipo="";
+    try{ch=await (await srv.getPrimaryService("fitness_machine")).getCharacteristic("treadmill_data");tipo="ftms";}catch(e){}
+    if(!ch){ch=await (await srv.getPrimaryService("running_speed_and_cadence")).getCharacteristic("rsc_measurement");tipo="rsc";}
+    ch.addEventListener("characteristicvaluechanged",e=>{const v=e.target.value;try{
+      if(tipo==="ftms"){const fl=v.getUint16(0,true);let o=2;if(!(fl&1)){S.velReal=v.getUint16(o,true)/100;o+=2;}if(fl&2)o+=2;if(fl&4){const d=v.getUint16(o,true)+(v.getUint8(o+2)<<16);if(S.distReal0==null)S.distReal0=d;S.distReal=(d-S.distReal0)/1000;}}
+      else{const fl=v.getUint8(0);S.velReal=v.getUint16(1,true)/256*3.6;let o=4;if(fl&1)o+=2;if(fl&2){const d=v.getUint32(o,true)/10;if(S.distReal0==null)S.distReal0=d;S.distReal=(d-S.distReal0)/1000;}}
+      S.velRealT=performance.now();}catch(er){}});
+    await ch.startNotifications();
+    dev.addEventListener("gattserverdisconnected",()=>{S.velReal=null;b.classList.remove("on");b.textContent="Leerla de la cinta";});
+    b.classList.remove("busca");b.classList.add("on");b.textContent="Leyendo: "+(dev.name||"la cinta");
+  }catch(e){b.classList.remove("busca");if(e&&e.name!=="NotFoundError")ayuda("No he podido conectar con la cinta. No pasa nada: pon la velocidad a mano con − y +.");}
+}
+$("cinta").addEventListener("click",conectaCinta);
+
+/* ---------- Cronómetro y tramos ---------- */
+const tTramo=()=>S.acum+(S.corre?(performance.now()-S.t0)/1000:0);
+const tTotal=()=>S.tAcum+(S.corre?(performance.now()-S.tT0)/1000:0);
+let ctx=null;
+function pita(f,ms){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;ctx=ctx||new A();const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f||880;g.gain.value=.2;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+(ms||150)/1000);}catch(e){}}
+function vibra(p){try{navigator.vibrate&&navigator.vibrate(p);}catch(e){}}
+function habla(t){try{if(!S.voz||!window.speechSynthesis)return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="es-ES";u.rate=1.05;const v=speechSynthesis.getVoices().find(x=>/^es[-_]ES/i.test(x.lang))||speechSynthesis.getVoices().find(x=>/^es/i.test(x.lang));if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}}
+function objetivoTxt(p){
+  const a=[];if(p.vel)a.push(coma(p.vel,1)+" km/h");else if(p.ritmo)a.push(String(p.ritmo).replace("-","–")+" /km");
+  const r=rangoFc(p.fc);if(r)a.push(`pulso ${r[0]}–${r[1]}`);
+  if(!a.length&&p.nota)a.push(p.nota);
+  return a.join(" · ");
+}
+function fraseVoz(p){
+  const d=p.seg?(p.seg>=60?`${Math.floor(p.seg/60)} minuto${Math.floor(p.seg/60)===1?"":"s"}`:p.seg+" segundos"):"";
+  const r=rangoFc(p.fc);
+  return `${nombrePaso(p)}. ${d}${p.vel?", a "+String(p.vel).replace(".",",")+" kilómetros por hora":""}${r?", pulso entre "+r[0]+" y "+r[1]:""}.`;
+}
+function ir(i){
+  if(!conPlan)return;
+  S.i=Math.max(0,Math.min(P.length,i));S.acum=0;S.t0=performance.now();S.avis={};
+  if(S.i>=P.length){S.corre=false;S.tAcum=tTotal();vibra([300,120,300,120,300]);pita(1320,400);habla("Entreno terminado. Buen trabajo.");}
+  else{const p=P[S.i];if(p.vel){S.vel=p.vel;guardaVel();}vibra([220,90,220]);pita(p.tipo==="interval"?1320:880,260);setTimeout(()=>habla(fraseVoz(p)),300);}
+  pinta();
+}
+function playPausa(){
+  if(conPlan&&S.i>=P.length)return;
+  const ahora=performance.now();
+  if(S.corre){S.acum=tTramo();S.tAcum=tTotal();S.corre=false;}
+  else{S.t0=ahora;S.tT0=ahora;S.corre=true;S.ultT=ahora;pita(660,80);if(conPlan&&S.acum<1)habla(fraseVoz(P[S.i]));pideLuz();}
+  pinta();
+}
+$("play").addEventListener("click",playPausa);
+$("ant").addEventListener("click",()=>ir(S.i-1));
+$("sig").addEventListener("click",()=>ir(S.i+1));
+function guardaVel(){try{localStorage.setItem("pulso.vel",String(S.vel));}catch(e){}}
+function cambiaVel(d){S.vel=Math.max(3,Math.min(20,Math.round((S.vel+d)*10)/10));guardaVel();vibra(10);pinta();}
+let rep=0;
+[["velMenos",-.1],["velMas",.1]].forEach(([id,d])=>{const b=$(id);
+  b.addEventListener("click",()=>cambiaVel(d));
+  b.addEventListener("pointerdown",()=>{clearInterval(rep);rep=setTimeout(()=>{rep=setInterval(()=>cambiaVel(d),140);},450);});
+  ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>{clearTimeout(rep);clearInterval(rep);}));});
+$("voz").addEventListener("click",()=>{S.voz=!S.voz;try{localStorage.setItem("pulso.voz",S.voz?"1":"0");}catch(e){}if(!S.voz)try{speechSynthesis.cancel();}catch(e){}else habla("Voz activada");pintaVoz();});
+function pintaVoz(){const b=$("voz");b.setAttribute("aria-pressed",String(S.voz));b.setAttribute("aria-label",S.voz?"Quitar la voz":"Poner la voz");b.querySelector(".ond").style.opacity=S.voz?1:.15;}
+
+/* ---------- Pantalla siempre encendida ---------- */
+let WL=null;
+async function pideLuz(){try{if(navigator.wakeLock&&!WL){WL=await navigator.wakeLock.request("screen");WL.addEventListener("release",()=>{WL=null;});}}catch(e){WL=null;}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")pideLuz();});
+document.addEventListener("click",()=>pideLuz(),{once:true});
+
+/* ---------- Pintar ---------- */
+const velAct=()=>S.velReal!=null&&performance.now()-S.velRealT<5000?S.velReal:S.vel;
+function pintaFc(){
+  const viejo=S.fc!=null&&performance.now()-S.fcT>6000,fc=viejo?null:S.fc,e=estado(fc);
+  document.documentElement.style.setProperty("--st",e.col);
+  const n=$("fcN");n.textContent=fc==null?"—":String(fc);n.classList.toggle("sin",fc==null);
+  n.setAttribute("aria-label",fc==null?"Pulso: sin datos":`Pulso ${fc} pulsaciones por minuto`);
+  $("fcE").textContent=fc==null?(S.dev?(viejo?"Sin señal del reloj":"Esperando el pulso…"):" "):e.txt;
+  $("fcS").textContent=fc==null?"":e.sub;
+  $("fcX").innerHTML=S.n?`<span>Media <b>${Math.round(S.suma/S.n)}</b></span><span>Máximo <b>${S.max}</b></span>`:"";
+  if(fc!=null){const p=pasoAct(),r=p?rangoFc(p.fc):null;if(S.corre&&r&&fc>r[1]+2){const k=Math.floor(Date.now()/20000);if(!S.avis["alto"+k]){S.avis["alto"+k]=1;vibra([120,80,120]);pita(440,200);}}}
+  pintaBt();
+}
+function pinta(){
+  pintaFc();
+  const tt=tTotal(),v=velAct();
+  $("dT").textContent=reloj(tt);
+  $("dR").textContent=v>0?reloj(3600/v):"—";
+  const dist=S.distReal!=null?S.distReal:S.dist;
+  $("dD").textContent=coma(dist,2);$("dD2").textContent=S.distReal!=null?"km (de la cinta)":"km (calculada)";
+  $("velV").textContent=coma(v,1);
+  $("velL").textContent=S.velReal!=null&&performance.now()-S.velRealT<5000?"km/h, leída de la cinta":"km/h de la cinta";
+  $("velMenos").disabled=$("velMas").disabled=S.velReal!=null&&performance.now()-S.velRealT<5000;
+  const p=pasoAct(),fin=conPlan&&S.i>=P.length;
+  $("tramo").classList.toggle("oculto",!conPlan);$("ant").classList.toggle("oculto",!conPlan);$("sig").classList.toggle("oculto",!conPlan);
+  document.querySelector(".mandos").style.gridTemplateColumns=conPlan?"64px 1fr 64px":"1fr";
+  $("play").textContent=fin?"Hecho":S.corre?"Pausa":(tt>0?"Seguir":"Empezar");$("play").disabled=fin;
+  if(conPlan){
+    const tr=$("tramo");
+    if(fin){tr.style.setProperty("--tc","var(--accent)");$("trN").textContent="¡Hecho!";$("trT").textContent=reloj(tt);$("trO").textContent="Para el reloj y guarda la actividad.";$("trB").style.width="100%";$("trS").textContent="";}
+    else{
+      const t=tTramo(),rest=p.seg?Math.max(0,p.seg-t):null,sig=P[S.i+1];
+      tr.style.setProperty("--tc",TCOL[p.tipo]||"var(--accent)");
+      $("trN").textContent=nombrePaso(p);
+      $("trT").textContent=p.seg?reloj(rest):p.m?coma(p.m/1000,2)+" km":reloj(t);
+      $("trO").textContent=objetivoTxt(p)||" ";
+      $("trB").style.width=(p.seg?Math.min(100,t/p.seg*100):0)+"%";
+      $("trS").innerHTML=sig?`Después: <b>${nombrePaso(sig)}</b>${objetivoTxt(sig)?" · "+objetivoTxt(sig):""}${sig.seg?" · "+reloj(sig.seg):""}`:"Es el último tramo";
+    }
+  }
+}
+function grafico(){
+  const cv=$("graf"),r=cv.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1);
+  if(!r.width)return;
+  if(cv.width!==Math.round(r.width*dpr)){cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);}
+  const c=cv.getContext("2d"),W=cv.width,H=cv.height;c.clearRect(0,0,W,H);
+  const now=Date.now(),t0=now-600000,pts=S.hist;
+  const p=pasoAct(),rg=p?rangoFc(p.fc):null;
+  let lo=Math.min(100,...pts.map(x=>x[1]),rg?rg[0]:999)-5,hi=Math.max(150,...pts.map(x=>x[1]),rg?rg[1]:0)+5;
+  const X=t=>(t-t0)/600000*W,Y=v=>H-(v-lo)/(hi-lo)*(H-6*dpr)-3*dpr;
+  if(rg){c.fillStyle="rgba(215,255,31,.12)";c.fillRect(0,Y(rg[1]),W,Y(rg[0])-Y(rg[1]));}
+  if(pts.length>1){c.beginPath();pts.forEach((q,i)=>{const x=X(q[0]),y=Y(q[1]);i?c.lineTo(x,y):c.moveTo(x,y);});
+    c.strokeStyle=getComputedStyle($("fcN")).color||"#D7FF1F";c.lineWidth=2.5*dpr;c.lineJoin="round";c.stroke();}
+}
+/* Bucle: cronómetro, cuenta atrás, distancia */
+setInterval(()=>{
+  const ahora=performance.now();
+  if(S.corre){
+    const dt=(ahora-S.ultT)/1000;S.ultT=ahora;if(dt>0&&dt<5)S.dist+=velAct()*dt/3600;
+    const p=pasoAct();
+    if(p&&p.seg){const r=p.seg-tTramo();[3,2,1].forEach(k=>{if(r<=k&&r>k-1&&!S.avis["c"+k]){S.avis["c"+k]=1;pita(660,90);vibra(60);}});if(r<=0){ir(S.i+1);return;}}
+  }else S.ultT=ahora;
+  pinta();
+},250);
+setInterval(grafico,1000);
+/* Truco para probar sin reloj: añade &demo=1 al enlace */
+if(/(^|[#&])demo=1/.test(location.hash)){$("fc").classList.remove("sinreloj");ayuda("");S.dev={name:"Demo",gatt:{connected:true}};let f=128;setInterval(()=>{f=Math.max(95,Math.min(195,f+Math.round(Math.random()*6-2.4)));nuevoPulso(f);},1000);}
+
+/* Primera pintada */
+pintaVoz();
+if(!BT_OK)ayuda(`<b>Este navegador no puede leer el reloj por Bluetooth.</b> Abre esta página en <b>Chrome</b> del móvil. El cronómetro y los tramos funcionan igual.`);
+else ayuda(AYUDA_RELOJ);
+pinta();grafico();
+window.addEventListener("resize",grafico);
+</script>
+</body>
+</html>
