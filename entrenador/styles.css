@@ -944,3 +944,5 @@ body.sin-cinta .pr-v{grid-template-columns:repeat(2,minmax(0,1fr))}
 .prev-ritmos:empty{display:none}
 .pr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px 12px;margin-top:6px}
 .pr-grid b{color:var(--accent);font-variant-numeric:tabular-nums}
+.version-pie{text-align:center;font-size:11px;color:var(--ink3);padding:6px 0 96px;opacity:.7}
+.version-nueva{position:fixed;left:12px;right:12px;top:10px;z-index:100;border:0;border-radius:12px;padding:12px 14px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:800;font-size:14.5px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.6)}

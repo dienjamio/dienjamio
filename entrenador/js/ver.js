@@ -1,17 +1,18 @@
 /* Vista del deportista: su semana, su menú, sus carreras y su progreso. Puede registrar entrenos,
    valorar la semana y proponer carreras (se guardan en su buzón y los ve el entrenador). */
-import { $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611170534";
-import { claseTipo, tipoDia, NOM_TIPO, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611170534";
-import { leerArchivo, fusionar } from "./importar.js?v=202611170534";
-import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611170534";
-import { PRUEBAS, CARGA_TXT, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170534";
-import { htmlReloj, textoPasos, MARCAS } from "./reloj.js?v=202611170534";
-import { avisar, htmlSuscribir } from "./avisos.js?v=202611170534";
-import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611170534";
-import { htmlPrediccion } from "./prediccion.js?v=202611170534";
-import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611170534";
-import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611170534";
-import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611170534";
+import { comprobarVersion, $, $$, esc, hoy, lunesDe, sumaDias, diaSemana, rangoSemana, fechaLarga, fechaCorta, diasEntre, uid, toast, comprimirImagen, DIAS } from "./util.js?v=202611170543";
+import { claseTipo, tipoDia, NOM_TIPO, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlSesion, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, htmlDatosAct, mostrarActividad, actPorClave, registrarAct } from "./vista.js?v=202611170543";
+import { leerArchivo, fusionar } from "./importar.js?v=202611170543";
+import { leerPublico, listarAportes, guardarAporte, borrarAporte, registrarVisita, guardarFoto, leerFoto, borrarFoto } from "./almacen.js?v=202611170543";
+import { PRUEBAS, CARGA_TXT, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170543";
+import { leerCaptura } from "./captura.js?v=202611170543";
+import { htmlReloj, textoPasos, MARCAS } from "./reloj.js?v=202611170543";
+import { avisar, htmlSuscribir } from "./avisos.js?v=202611170543";
+import { htmlHilo, htmlCaja, sinLeerDep, idMensaje } from "./chat.js?v=202611170543";
+import { htmlPrediccion } from "./prediccion.js?v=202611170543";
+import { calcCarga, htmlCarga, BIEN_PREG, puntuarBien, nivelBien } from "./carga.js?v=202611170543";
+import { geoGuardada, pedirUbicacion, tiempoHoy, resumenTiempo, htmlTiempo } from "./tiempo.js?v=202611170543";
+import { calcProgreso, mezclarProgreso } from "./progreso.js?v=202611170543";
 
 let P = null, v = "hoy", lunes = lunesDe(hoy()), token = "", aportes = [];
 const semanas = () => Object.keys(P.semanas || {}).sort();
@@ -760,6 +761,24 @@ function enlazarDialogos() {
       try { fotos.push({ full: await comprimirImagen(f, 1600, 0.8), thumb: await comprimirImagen(f, 260, 0.6) }); pintarFotos(); }
       catch (err) { toast(err.message); }
     }
+    // si es una captura de Strava, Garmin, Polar…, se leen sus datos y se rellenan solos
+    if (regAct === undefined && regSes) {
+      $("#reg-act").innerHTML = "📖 Leyendo tu captura…";
+      for (const f of files) {
+        try {
+          const d = await leerCaptura(f);
+          if (!d.dur && !d.km) continue;
+          const fr = $("#f-reg");
+          if (d.km && !fr.elements.km.value) fr.elements.km.value = String(d.km).replace(".", ",");
+          if (d.dur && !fr.elements.tiempo.value) fr.elements.tiempo.value = fmtT(d.dur);
+          if (d.fcMed && !fr.elements.fc.value) fr.elements.fc.value = d.fcMed;
+          regAct = { fecha: sumaDias(regSes.l, regSes.i), dep: regSes.s.dep, km: d.km || 0, dur: d.dur || 0, mov: d.dur || 0, fcMed: d.fcMed || null, fcMax: d.fcMax || null, sube: d.sube ?? null, kcal: d.kcal || null, mejores: {}, fuente: "Captura", titulo: regSes.s.t };
+          $("#reg-act").innerHTML = `✅ Leído de tu captura: ${htmlDatosAct(regAct)}${d.sube != null ? ` · +${d.sube} m` : ""}${d.kcal ? ` · ${d.kcal} kcal` : ""}<br><small>Revísalo: si algo no cuadra, cámbialo abajo.</small>`;
+          break;
+        } catch (err) { console.warn(err); }
+      }
+      if (regAct === undefined) $("#reg-act").innerHTML = "";
+    }
   });
   $("#reg-fotos").addEventListener("click", e => { const b = e.target.closest("[data-quitar-foto]"); if (!b) return; fotos.splice(+b.dataset.quitarFoto, 1); pintarFotos(); });
   $("#reg-act-in").addEventListener("change", async e => {
@@ -809,3 +828,4 @@ function enlazarDialogos() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => comprobarVersion("ver.js", import.meta.url));

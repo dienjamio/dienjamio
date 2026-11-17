@@ -60,3 +60,24 @@ export async function comprimirImagen(file, max = 1100, calidad = 0.72) {
     return d;
   } finally { URL.revokeObjectURL(url); }
 }
+
+/**
+ * Comprueba si hay una versión más nueva publicada que la que está abierta (el móvil a veces guarda la antigua).
+ * guion: "app.js" o "ver.js". Muestra un aviso con botón para actualizar y devuelve la versión abierta.
+ */
+export async function comprobarVersion(guion, urlModulo) {
+  const mia = (/[?&]v=(\d+)/.exec(urlModulo) || [])[1] || "";
+  const pie = document.createElement("div"); pie.className = "version-pie";
+  pie.textContent = mia ? `Versión ${mia.slice(6, 8)}/${mia.slice(4, 6)} ${mia.slice(8, 10)}:${mia.slice(10, 12)}` : "";
+  document.body.append(pie);
+  try {
+    const html = await (await fetch(location.pathname + "?_=" + Date.now(), { cache: "no-store" })).text();
+    const nueva = (new RegExp("js/" + guion.replace(".", "\\.") + "\\?v=(\\d+)").exec(html) || [])[1];
+    if (mia && nueva && nueva > mia) {
+      const b = document.createElement("button"); b.className = "version-nueva"; b.textContent = "🔄 Hay una versión nueva: toca para actualizar";
+      b.onclick = () => { const u = new URL(location.href); u.searchParams.set("_", Date.now()); location.replace(u.href); };
+      document.body.append(b);
+    }
+  } catch (e) { }
+  return mia;
+}

@@ -1,19 +1,20 @@
 /* App del entrenador */
-import { $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611170534";
-import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611170534";
-import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611170534";
-import { BIBLIO } from "./biblioteca.js?v=202611170534";
-import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611170534";
-import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611170534";
-import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611170534";
-import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611170534";
-import { predecir, htmlPrediccion } from "./prediccion.js?v=202611170534";
-import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611170534";
-import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611170534";
-import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611170534";
-import { calcProgreso } from "./progreso.js?v=202611170534";
-import * as A from "./almacen.js?v=202611170534";
-import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611170534";
+import { comprobarVersion, $, $$, esc, fmtMin, fmtRitmo, fmtHoras, toast, uid, comprimirImagen, DIAS, DIAS_C, hoy, lunesDe, sumaDias, rangoSemana, fechaCorta, diasEntre, parseTiempo } from "./util.js?v=202611170543";
+import { generarSemana, refrescarRitmos, MOTOR_V, recalcular, calcZonas, sesionVacia, efectivo, bmr, OBJ, PRUEBAS, PRIORIDAD, DEP } from "./motor.js?v=202611170543";
+import { claseTipo, htmlCabSemana, htmlDia, htmlMenuDia, htmlZonas, htmlCarreraFicha, htmlPrevision, htmlProgreso, SENS_TXT, mostrarEjercicio, htmlActividades, mostrarActividad, actPorClave } from "./vista.js?v=202611170543";
+import { BIBLIO } from "./biblioteca.js?v=202611170543";
+import { leerTrack, prevision, normalizarTrack } from "./carrera.js?v=202611170543";
+import { analizar, claveClaude, guardarClave, probarClave } from "./claude.js?v=202611170543";
+import { leerCaptura } from "./captura.js?v=202611170543";
+import { contexto as ctxAsistente, preguntar, htmlPropuesta, lunesDeSemana } from "./asistente.js?v=202611170543";
+import { avisar, nuevoCanal, htmlSuscribir } from "./avisos.js?v=202611170543";
+import { predecir, htmlPrediccion } from "./prediccion.js?v=202611170543";
+import { htmlHilo, htmlCaja, mensajes, sinLeerEnt, idMensaje } from "./chat.js?v=202611170543";
+import { htmlInforme, ultimosMeses, nombreMes } from "./informe.js?v=202611170543";
+import { calcCarga, htmlCarga, puntuarBien, nivelBien, BIEN_PREG } from "./carga.js?v=202611170543";
+import { calcProgreso } from "./progreso.js?v=202611170543";
+import * as A from "./almacen.js?v=202611170543";
+import { leerArchivo, resumen, fusionar } from "./importar.js?v=202611170543";
 
 let atletas = [];
 let actual = null;          // deportista abierto (con .semanas cargadas)
@@ -556,6 +557,7 @@ function pintarAtleta() {
         <a class="btn sec mini" href="${A.nube ? esc(enlace(a)) + "&yo=1" : "#"}" target="_blank" rel="noopener" ${A.nube ? "" : 'aria-disabled="true"'}>👁️ Ver como él</a>
         ${a.telefono && A.nube ? `<button class="btn sec mini" data-acc="avisar">📣 Avisar por WhatsApp</button>` : ""}
         ${A.nube ? `<button class="btn sec mini" data-acc="aviso-movil">🔔 Avisar al móvil</button>` : ""}
+        <button class="btn pri mini" data-acc="add-act">＋ Actividad hecha (captura)</button>
       </div>
     </div>`;
   $$("#subtabs [data-sub]").forEach(b => b.setAttribute("aria-selected", b.dataset.sub === sub));
@@ -757,13 +759,13 @@ async function aplicarAcciones(a, acciones) {
 }
 
 /* ---------------- Añadir a mano (o desde una captura) una actividad hecha ---------------- */
-function dialogoActividad(a) {
+function dialogoActividad(a, fecha = hoy()) {
   dialogo(`<h3>＋ Actividad hecha</h3>
-    <p class="small">Sube la captura de Strava, Garmin o Polar y ${claveClaude() ? "Claude rellena los datos" : "rellena los datos (con tu clave de Claude se rellenan solos)"}. Revisa y guarda.</p>
+    <p class="small">Sube la captura de Strava, Garmin o Polar y se rellenan solos los datos. Revisa y guarda. También puedes escribirlos a mano.</p>
     <label class="btn sec" style="width:100%;justify-content:center">📷 Leer una captura<input type="file" id="act-img" accept="image/*" hidden></label>
     <div id="act-msg" class="small"></div>
     <div class="g2">
-      <label>Día<input type="date" id="act-fecha" value="${hoy()}" max="${hoy()}"></label>
+      <label>Día<input type="date" id="act-fecha" value="${fecha}" max="${hoy()}"></label>
       <label>Deporte<select id="act-dep"><option value="run">🏃 Carrera</option><option value="bike">🚴 Bici</option><option value="swim">🏊 Natación</option><option value="fuerza">🏋️ Fuerza</option></select></label>
       <label>Distancia (km)<input id="act-km" inputmode="decimal" placeholder="9,50"></label>
       <label>Tiempo<input id="act-t" placeholder="54:23"></label>
@@ -779,8 +781,20 @@ function dialogoActividad(a) {
   $("#act-km").addEventListener("input", ritmo); $("#act-t").addEventListener("input", ritmo);
   $("#act-img").addEventListener("change", async e => {
     const f = e.target.files[0]; e.target.value = ""; if (!f) return;
-    if (!claveClaude()) { $("#act-msg").innerHTML = `<span class="alerta">Para leer capturas pon tu clave de Claude en Herramientas → Claude. Mientras, rellena los datos a mano.</span>`; return; }
-    $("#act-msg").textContent = "🤖 Leyendo la captura…";
+    $("#act-msg").textContent = "📖 Leyendo la captura…";
+    try {
+      const d = await leerCaptura(f);
+      if (d.dur || d.km) {
+        if (d.km) $("#act-km").value = String(d.km).replace(".", ",");
+        if (d.dur) $("#act-t").value = fmtHoras(d.dur);
+        if (d.fcMed) $("#act-fc").value = d.fcMed; if (d.fcMax) $("#act-fcx").value = d.fcMax;
+        if (d.sube != null) $("#act-sube").value = d.sube; if (d.kcal) $("#act-kcal").value = d.kcal;
+        ritmo(); $("#act-msg").textContent = `✅ Datos leídos${d.corregido ? " (distancia ajustada con el tiempo y el ritmo)" : ""}: revísalos y guarda.`;
+        return;
+      }
+    } catch (err) { console.warn(err); }
+    if (!claveClaude()) { $("#act-msg").innerHTML = `<span class="alerta">No he podido leer esta captura. Rellena los datos a mano.</span>`; return; }
+    $("#act-msg").textContent = "🤖 Leyendo la captura con Claude…";
     try {
       const img = await comprimirImagen(f, 1400, 0.85);
       const txt = await analizar(`Lee esta captura de una actividad deportiva y devuelve SOLO un objeto JSON (sin texto alrededor) con estas claves, usando null si un dato no aparece: {"deporte": "run"|"bike"|"swim"|"fuerza", "km": número, "tiempo": "h:mm:ss o mm:ss (tiempo en movimiento si aparece)", "fc_media": número, "fc_max": número, "desnivel": número en metros, "kcal": número, "fecha": "AAAA-MM-DD si aparece", "titulo": "si aparece"}. No inventes datos.`, "Captura de la actividad:", [img]);
@@ -1570,7 +1584,7 @@ function enlazar() {
     if (acc === "chat-enviar") return enviarMensaje(a);
     if (acc === "chat-recargar") { try { a._aportes = await A.listarAportes(a.token); } catch (e) { } return pintarChat(); }
     if (acc === "informe") return dialogoInforme(a);
-    if (acc === "add-act") return dialogoActividad(a);
+    if (acc === "add-act") return dialogoActividad(a, t.dataset.f || hoy());
     if (acc === "guardar-act") return guardarActividad(a);
     if (acc === "asist-enviar") { const t_ = $("#asist-txt").value.trim(); return enviarAsistente(a, t_); }
     if (acc === "asist-ej") return enviarAsistente(a, t.textContent.trim());
@@ -1759,3 +1773,4 @@ function enlazar() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => comprobarVersion("app.js", import.meta.url));

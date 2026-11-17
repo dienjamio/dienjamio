@@ -1,8 +1,8 @@
 /* Pintado compartido: lo usan la app del entrenador y la vista del deportista. */
-import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611170534";
-import { htmlDetalle } from "./detalle.js?v=202611170534";
-import { infoEjercicio } from "./biblioteca.js?v=202611170534";
-import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170534";
+import { esc, fmtMin, fmtRitmo, fmtHoras, DIAS, DIAS_C, sumaDias, fechaCorta, rangoSemana, hoy, diasEntre } from "./util.js?v=202611170543";
+import { htmlDetalle } from "./detalle.js?v=202611170543";
+import { infoEjercicio } from "./biblioteca.js?v=202611170543";
+import { DEP, CARGA_TXT, PRUEBAS, PRIORIDAD, ZNOM, RPE, OBJ, NOMBRE_RITMO, ZONA_RITMO } from "./motor.js?v=202611170543";
 
 const ORDEN = ["run", "bike", "swim", "carrera", "fuerza", "movilidad"];
 
@@ -145,7 +145,7 @@ export function htmlDia(snap, i, ed = false, op = {}) {
     <div class="dia-cab"><h3>${DIAS[i]} <span class="fecha">${fechaCorta(fecha)}</span>${esHoy ? ' <span class="badge-hoy">Hoy</span>' : ""}</h3><span class="carga ${d.carga}">${CARGA_TXT[d.carga]}</span></div>
     ${ses}
     ${hechas.length ? `<div class="reloj">${hechas.map(a => `<button class="reloj-b" data-acc="ver-act" data-k="${registrarAct(a)}">⌚ <b>Hecho:</b> ${ICO[a.dep] || ""} ${htmlDatosAct(a)} <span class="mas">Ver detalle ›</span></button>`).join("")}</div>` : ""}
-    ${ed ? `<button class="btn add mini" data-acc="add-ses" data-dia="${i}">＋ Añadir sesión</button>` : ""}
+    ${ed ? `<div class="fila"><button class="btn add mini" data-acc="add-ses" data-dia="${i}">＋ Añadir sesión</button>${fecha <= hoy() ? `<button class="btn add mini" data-acc="add-act" data-f="${fecha}">⌚ Añadir lo que hizo (captura)</button>` : ""}</div>` : ""}
   </article>`;
 }
 
