@@ -179,7 +179,7 @@ const nombrePaso=p=>p.tipo==="interval"?(p.reps?`Serie ${p.rep} de ${p.reps}`:"S
 const S={fc:null,fcT:0,hist:[],max:0,suma:0,n:0,
   corre:false,acum:0,t0:0,i:0,tAcum:0,tT0:0,
   vel:10,velReal:null,velRealT:0,dist:0,distReal:null,distReal0:null,ultT:0,
-  dev:null,devC:null,buscando:false,voz:true,avis:{}};
+  dev:null,devC:null,buscando:false,voz:true,avis:{},auto:false,parado:0};
 try{S.voz=localStorage.getItem("pulso.voz")!=="0";const v=Number(localStorage.getItem("pulso.vel"));if(v>=3&&v<=20)S.vel=v;}catch(e){}
 const P=E.pasos,conPlan=P.length>0;
 if(conPlan&&P[0].vel)S.vel=P[0].vel;
@@ -209,13 +209,13 @@ function pintaBt(){
   b.classList.toggle("on",on);b.classList.toggle("busca",S.buscando&&!on);
   b.querySelector("span").textContent=on?(S.dev.name||"Reloj"):S.buscando?"Conectando…":S.dev?"Reconectar":"Conectar reloj";
 }
-const AYUDA_RELOJ=`<b>Primero, en el reloj</b> (con la actividad de cinta ya empezada o antes de empezar):<ol><li>Mantén pulsado el botón de la izquierda del medio (MENU) o abre los controles.</li><li>Toca <b>Emitir frecuencia cardiaca</b> (en algunos modelos: Sensores → Frecuencia cardiaca → Emitir FC).</li><li>Aquí, toca <b>Conectar reloj</b> y elige tu Forerunner en la lista.</li></ol>Si no sale en la lista, apaga y enciende el Bluetooth del móvil y vuelve a probar.`;
+const AYUDA_RELOJ=`<b>Orden para no tocar más el móvil:</b><ol><li>Arranca la cinta y empieza la actividad en el reloj.</li><li>En el reloj, <b>Emitir frecuencia cardiaca</b> (menú de controles, o Sensores → Frecuencia cardiaca → Emitir). Si activas <b>Emitir durante la actividad</b> en los ajustes del sensor de muñeca, lo hace solo cada vez que empiezas.</li><li>Aquí, <b>Conectar reloj</b> y elige tu Forerunner: el cronómetro arranca solo con el primer pulso.</li></ol>Si no sale en la lista, apaga y enciende el Bluetooth del móvil y vuelve a probar.`;
 async function conecta(){
   if(!BT_OK){ayuda(`<b>Este navegador no puede leer el reloj.</b> Abre esta página en <b>Chrome</b> del móvil (no dentro de otra app). En iPhone no funciona.`);return;}
   try{
     S.buscando=true;pintaBt();
     const dev=await navigator.bluetooth.requestDevice({filters:[{services:["heart_rate"]}],optionalServices:["battery_service"]});
-    S.dev=dev;$("fc").classList.remove("sinreloj");dev.addEventListener("gattserverdisconnected",()=>{S.fc=null;pinta();pintaBt();reconecta();});
+    S.dev=dev;S.auto=true;$("fc").classList.remove("sinreloj");dev.addEventListener("gattserverdisconnected",()=>{S.fc=null;pinta();pintaBt();reconecta();});
     await engancha();
     ayuda("");
   }catch(e){
@@ -241,6 +241,8 @@ function reconecta(){
   reTimer=setTimeout(async()=>{reN++;try{await engancha();reN=0;ayuda("");}catch(e){reconecta();}},Math.min(8000,1000+reN*500));
 }
 function nuevoPulso(fc){
+  /* Arranque solo: el primer pulso que llega al conectar pone en marcha el cronómetro (sin tocar «Empezar») */
+  if(S.auto&&!S.corre&&tTotal()<1&&!(conPlan&&S.i>=P.length)){S.auto=false;playPausa();toast("Cronómetro en marcha");}
   const ahora=performance.now();S.fc=fc;S.fcT=ahora;
   const t=Date.now();S.hist.push([t,fc]);while(S.hist.length&&S.hist[0][0]<t-600000)S.hist.shift();
   if(S.corre){S.max=Math.max(S.max,fc);S.suma+=fc;S.n++;}
@@ -261,7 +263,7 @@ async function conectaCinta(){
     ch.addEventListener("characteristicvaluechanged",e=>{const v=e.target.value;try{
       if(tipo==="ftms"){const fl=v.getUint16(0,true);let o=2;if(!(fl&1)){S.velReal=v.getUint16(o,true)/100;o+=2;}if(fl&2)o+=2;if(fl&4){const d=v.getUint16(o,true)+(v.getUint8(o+2)<<16);if(S.distReal0==null)S.distReal0=d;S.distReal=(d-S.distReal0)/1000;}}
       else{const fl=v.getUint8(0);S.velReal=v.getUint16(1,true)/256*3.6;let o=4;if(fl&1)o+=2;if(fl&2){const d=v.getUint32(o,true)/10;if(S.distReal0==null)S.distReal0=d;S.distReal=(d-S.distReal0)/1000;}}
-      S.velRealT=performance.now();}catch(er){}});
+      S.velRealT=performance.now();autoCinta();}catch(er){}});
     await ch.startNotifications();
     dev.addEventListener("gattserverdisconnected",()=>{S.velReal=null;b.classList.remove("on");b.textContent="Leerla de la cinta";});
     b.classList.remove("busca");b.classList.add("on");b.textContent="Leyendo: "+(dev.name||"la cinta");
@@ -269,6 +271,13 @@ async function conectaCinta(){
 }
 $("cinta").addEventListener("click",conectaCinta);
 
+/* Con la cinta conectada, el cronómetro sigue a la cinta: arranca cuando se mueve y se para si se para más de 3 s */
+function autoCinta(){
+  const fin=conPlan&&S.i>=P.length,ahora=performance.now();
+  if(S.velReal>0.5){S.parado=0;if(!S.corre&&!fin){S.auto=false;playPausa();toast("La cinta arranca: cronómetro en marcha");}}
+  else if(S.corre){if(!S.parado)S.parado=ahora;else if(ahora-S.parado>3000){S.parado=0;playPausa();toast("Cinta parada: pausa");}}
+}
+function toast(t){let el=document.getElementById("toast");if(!el){el=document.createElement("div");el.id="toast";el.setAttribute("role","status");el.style.cssText="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#F4F5F0;color:#111;padding:10px 16px;border-radius:12px;font-weight:700;font-size:14px;z-index:9;transition:opacity .3s;max-width:88%;text-align:center";document.body.append(el);}el.textContent=t;el.style.opacity=1;clearTimeout(toast._t);toast._t=setTimeout(()=>{el.style.opacity=0;},2600);}
 /* ---------- Cronómetro y tramos ---------- */
 const tTramo=()=>S.acum+(S.corre?(performance.now()-S.t0)/1000:0);
 const tTotal=()=>S.tAcum+(S.corre?(performance.now()-S.tT0)/1000:0);
