@@ -90,6 +90,18 @@ button{font:inherit;color:inherit}
 .btn.peq{font-size:30px;font-family:var(--fd)}
 .mini{font-size:12.5px;color:var(--muted);text-align:center;margin:0}
 .oculto{display:none!important}
+#resumen{position:fixed;inset:0;z-index:5;background:var(--bg);overflow-y:auto;padding:max(14px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;max-width:640px;margin:0 auto}
+#resumen h2{font-family:var(--fd);font-weight:900;font-size:34px;text-transform:uppercase;letter-spacing:.02em;margin:4px 0 0;line-height:1}
+#resumen .sub{color:var(--ink-2);font-size:14px;margin:0}
+.rs-g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rs-g .dato b{font-size:34px}
+.rs-cal{background:color-mix(in srgb,var(--accent) 14%,var(--card));border-radius:14px;padding:12px 14px;font-size:14.5px;line-height:1.45;box-shadow:inset 0 0 0 1.5px var(--accent)}
+.rs-cal b.n{font-family:var(--fd);font-weight:900;font-size:30px;color:var(--accent);display:block;line-height:1.1}
+.rs-z{display:flex;flex-direction:column;gap:5px}
+.rs-z div{display:grid;grid-template-columns:34px 1fr 58px;gap:8px;align-items:center;font-size:13px;font-variant-numeric:tabular-nums}
+.rs-z i{display:block;height:10px;border-radius:999px;background:var(--zc)}
+.rs-z span:last-child{text-align:right;color:var(--ink-2)}
+.rs-a{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:auto}
 .calle .datos{grid-template-columns:1fr}.calle .dato.cn,.calle #velBox{display:none}
 :focus-visible{outline:3px solid var(--series);outline-offset:2px}
 
@@ -150,6 +162,7 @@ button{font:inherit;color:inherit}
     <div class="mandos">
       <button class="btn" type="button" id="ant" aria-label="Tramo anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <button class="btn pri" type="button" id="play">Empezar</button>
+      <button class="btn" type="button" id="fin">Terminar</button>
       <button class="btn" type="button" id="sig" aria-label="Siguiente tramo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
     </div>
   </div>
@@ -179,7 +192,7 @@ const nombrePaso=p=>p.tipo==="interval"?(p.reps?`Serie ${p.rep} de ${p.reps}`:"S
 const S={fc:null,fcT:0,hist:[],max:0,suma:0,n:0,
   corre:false,acum:0,t0:0,i:0,tAcum:0,tT0:0,
   vel:10,velReal:null,velRealT:0,dist:0,distReal:null,distReal0:null,ultT:0,
-  dev:null,devC:null,buscando:false,voz:true,avis:{}};
+  dev:null,devC:null,buscando:false,voz:true,avis:{},zon:{},conObj:0,enObj:0,sobreObj:0,ultFc:0};
 try{S.voz=localStorage.getItem("pulso.voz")!=="0";const v=Number(localStorage.getItem("pulso.vel"));if(v>=3&&v<=20)S.vel=v;}catch(e){}
 const P=E.pasos,conPlan=P.length>0;
 if(conPlan&&P[0].vel)S.vel=P[0].vel;
@@ -241,6 +254,8 @@ function reconecta(){
   reTimer=setTimeout(async()=>{reN++;try{await engancha();reN=0;ayuda("");}catch(e){reconecta();}},Math.min(8000,1000+reN*500));
 }
 function nuevoPulso(fc){
+  {const ahora0=performance.now(),dt=S.ultFc?(ahora0-S.ultFc)/1000:0;S.ultFc=ahora0;
+   if(S.corre&&dt>0&&dt<5){const z=zona(fc)[1];S.zon[z]=(S.zon[z]||0)+dt;const pp=pasoAct(),r=pp?rangoFc(pp.fc):null;if(r){S.conObj+=dt;if(fc>=r[0]&&fc<=r[1])S.enObj+=dt;else if(fc>r[1])S.sobreObj+=dt;}}}
   const ahora=performance.now();S.fc=fc;S.fcT=ahora;
   const t=Date.now();S.hist.push([t,fc]);while(S.hist.length&&S.hist[0][0]<t-600000)S.hist.shift();
   if(S.corre){S.max=Math.max(S.max,fc);S.suma+=fc;S.n++;}
@@ -345,8 +360,11 @@ function pinta(){
   $("velMenos").disabled=$("velMas").disabled=S.velReal!=null&&performance.now()-S.velRealT<5000;
   const p=pasoAct(),fin=conPlan&&S.i>=P.length;
   $("tramo").classList.toggle("oculto",!conPlan);$("ant").classList.toggle("oculto",!conPlan);$("sig").classList.toggle("oculto",!conPlan);
-  document.querySelector(".mandos").style.gridTemplateColumns=conPlan?"64px 1fr 64px":"1fr";
-  $("play").textContent=fin?"Hecho":S.corre?"Pausa":(tt>0?"Seguir":"Empezar");$("play").disabled=fin;
+  const parado=fin||(!S.corre&&tt>0);
+  $("fin").classList.toggle("oculto",!parado);$("play").classList.toggle("oculto",fin);
+  if(parado){$("ant").classList.add("oculto");$("sig").classList.add("oculto");}
+  document.querySelector(".mandos").style.gridTemplateColumns=fin?"1fr":parado?"1fr 1fr":conPlan?"64px 1fr 64px":"1fr";
+  $("play").textContent=S.corre?"Pausa":(tt>0?"Seguir":"Empezar");
   if(conPlan){
     const tr=$("tramo");
     if(fin){tr.style.setProperty("--tc","var(--accent)");$("trN").textContent="¡Hecho!";$("trT").textContent=reloj(tt);$("trO").textContent="Para el reloj y guarda la actividad.";$("trB").style.width="100%";$("trS").textContent="";}
@@ -388,6 +406,29 @@ setInterval(grafico,1000);
 /* Truco para probar sin reloj: añade &demo=1 al enlace */
 if(/(^|[#&])demo=1/.test(location.hash)){$("fc").classList.remove("sinreloj");ayuda("");S.dev={name:"Demo",gatt:{connected:true}};let f=128;setInterval(()=>{f=Math.max(95,Math.min(195,f+Math.round(Math.random()*6-2.4)));nuevoPulso(f);},1000);}
 
+/* ---------- Resumen al terminar (se queda en el móvil; lo de verdad lo guarda el reloj) ---------- */
+function resumen(){
+  const tt=tTotal(),dist=S.distReal!=null?S.distReal:S.dist,cal=E.cinta&&dist>=0.2;
+  const tot=Object.values(S.zon).reduce((a,b)=>a+b,0);
+  const r=document.createElement("section");r.id="resumen";r.setAttribute("role","dialog");r.setAttribute("aria-label","Resumen");
+  const mm=s=>reloj(s);
+  r.innerHTML=`<h2>Resumen</h2><p class="sub">${E.titulo} · ${new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})}</p>
+  <div class="rs-g">
+   <div class="dato"><span>Tiempo</span><b>${mm(tt)}</b></div>
+   ${E.cinta?`<div class="dato"><span>Distancia</span><b>${coma(dist,2)}</b><em>km ${S.distReal!=null?"de la cinta":"con tus velocidades"}</em></div>`:""}
+   ${E.cinta&&dist>0.05?`<div class="dato"><span>Ritmo medio</span><b>${reloj(tt/dist)}</b><em>min/km</em></div>`:""}
+   <div class="dato"><span>Pulso medio</span><b>${S.n?Math.round(S.suma/S.n):"—"}</b><em>máximo ${S.max||"—"}</em></div>
+  </div>
+  ${cal?`<div class="rs-cal">Al guardar en el reloj, elige <b>«Calibrar y guardar»</b> y pon la distancia de la cinta:<b class="n">${coma(dist,2)} km</b>Así el ritmo de la actividad en Garmin sale bien y el reloj afina sus próximas carreras en cinta.</div>`:""}
+  ${S.conObj>30?`<div class="dato" style="text-align:left"><span>En el pulso que tocaba</span><b>${Math.round(S.enObj/S.conObj*100)} %</b><em>${S.sobreObj>30?"por encima: "+mm(S.sobreObj):"casi nada por encima"}</em></div>`:""}
+  ${tot>30?`<div class="rs-z">${ZON.map(z=>{const v=S.zon[z[1]]||0;return `<div><b>${z[1]}</b><i style="--zc:${z[3]};width:${Math.max(2,v/tot*100)}%"></i><span>${mm(v)}</span></div>`;}).join("")}</div>`:""}
+  <p class="sub">Esto no se guarda: lo bueno queda en el reloj y la app lo coge de Garmin al sincronizar.</p>
+  <div class="rs-a"><button class="btn" type="button" id="rsV">Volver</button><button class="btn pri" type="button" id="rsN">Nueva sesión</button></div>`;
+  document.body.append(r);
+  $("rsV").onclick=()=>r.remove();
+  $("rsN").onclick=()=>{r.remove();Object.assign(S,{corre:false,acum:0,tAcum:0,i:0,dist:0,distReal0:S.distReal!=null?null:S.distReal0,distReal:null,max:0,suma:0,n:0,zon:{},conObj:0,enObj:0,sobreObj:0,avis:{}});if(conPlan&&P[0].vel)S.vel=P[0].vel;pinta();};
+}
+$("fin").addEventListener("click",()=>{if(S.corre)playPausa();resumen();vibra(30);});
 /* Primera pintada */
 pintaVoz();
 if(!BT_OK)ayuda(`<b>Este navegador no puede leer el reloj por Bluetooth.</b> Abre esta página en <b>Chrome</b> del móvil. El cronómetro y los tramos funcionan igual.`);
